@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mina's USS Adventure</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-size: 16px;
+        }
+        
+        #gameStats {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-align: right;
+            font-size: 16px;
+        }
+        
+        #objective {
+            position: absolute;
+            bottom: 60px;
+            left: 20px;
+            z-index: 100;
+            color: yellow;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            z-index: 100;
+            pointer-events: none;
+        }
+        
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background-color: white;
+        }
+        
+        #crosshair::before {
+            left: 50%;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            margin-left: -1px;
+        }
+        
+        #crosshair::after {
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            margin-top: -1px;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        #console {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: yellow;
+            font-size: 12px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            max-width: 400px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        
+        /* Mobile controls */
+        #mobileControls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: none;
+            z-index: 200;
+        }
+        
+        .mobile-joystick {
+            width: 120px;
+            height: 120px;
+            border: 3px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            position: relative;
+            background: rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+        
+        .mobile-joystick-handle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.8);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s;
+        }
+        
+        .mobile-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .mobile-button {
+            width: 60px;
+            height: 60px;
+            border: 2px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            user-select: none;
+        }
+        
+        .mobile-button:active {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        /* Hide mobile controls on desktop */
+        @media (min-width: 768px) {
+            #mobileControls { display: none !important; }
+        }
+        
+        /* Show mobile controls on mobile */
+        @media (max-width: 767px) {
+            #mobileControls { display: block !important; }
+            #instructions { font-size: 12px; }
+            #console { font-size: 10px; max-width: 200px; }
+        }
+        
+        /* Temporarily show mobile controls for testing */
+        #mobileControls { 
+            display: block !important; 
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div>Mina's USS Adventure</div>
+            <div>Explore Universal Studios Singapore!</div>
+            <div id="debug-info">Click to lock mouse, then use WASD to move</div>
+        </div>
+        <div id="gameStats">
+            <div>Health: <span id="health">100</span>%</div>
+            <div>Treasures: <span id="treasures">0</span>/5</div>
+            <div>Monsters: <span id="monsters">0</span> nearby</div>
+        </div>
+        <div id="objective">
+            Find all 5 treasures while avoiding the mummy monsters!
+        </div>
+        <div id="instructions">
+            <div>WASD: Move Mina | Mouse: Look around | Enter attractions to find treasures!</div>
+            <div>Avoid the mummy monsters or they'll chase you!</div>
+        </div>
+        <!-- <div id="console">Console output will appear here...</div> -->
+        
+        <!-- Mobile Controls -->
+        <div id="mobileControls">
+            <div class="mobile-joystick" id="movementJoystick">
+                <div class="mobile-joystick-handle" id="joystickHandle"></div>
+            </div>
+            <div class="mobile-buttons">
+                <div class="mobile-button" id="runButton">🏃</div>
+                <div class="mobile-button" id="cameraButton">📷</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
