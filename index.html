@@ -180,6 +180,89 @@
             display: block !important; 
             opacity: 0.8;
         }
+        
+        /* Comic Speech Bubbles */
+        .speech-bubble {
+            position: absolute;
+            background: white;
+            border: 3px solid #333;
+            border-radius: 20px;
+            padding: 15px 20px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            max-width: 250px;
+            z-index: 150;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.3);
+            transform-origin: center bottom;
+            animation: bubbleAppear 0.3s ease-out;
+        }
+        
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 30px;
+            width: 0;
+            height: 0;
+            border: 15px solid transparent;
+            border-top-color: white;
+            border-bottom: 0;
+            margin-left: -15px;
+        }
+        
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 30px;
+            width: 0;
+            height: 0;
+            border: 18px solid transparent;
+            border-top-color: #333;
+            border-bottom: 0;
+            margin-left: -18px;
+        }
+        
+        .speech-bubble.mina {
+            background: #ffb3d9;
+            border-color: #ff69b4;
+        }
+        
+        .speech-bubble.sacha {
+            background: #b3ffb3;
+            border-color: #32cd32;
+        }
+        
+        @keyframes bubbleAppear {
+            0% {
+                transform: scale(0) translateY(20px);
+                opacity: 0;
+            }
+            70% {
+                transform: scale(1.1) translateY(-5px);
+            }
+            100% {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .speech-bubble.fade-out {
+            animation: bubbleDisappear 0.5s ease-in forwards;
+        }
+        
+        @keyframes bubbleDisappear {
+            0% {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0.8) translateY(-10px);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>

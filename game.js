@@ -64,6 +64,35 @@ class MinaAdventureGame {
             cameraMode: false
         };
         
+        // Speech bubble system
+        this.speechSystem = {
+            currentBubble: null,
+            dialogues: [
+                // Mina speaking
+                { speaker: 'mina', text: 'Wow! Look at that huge castle, Sacha!' },
+                { speaker: 'mina', text: 'I hope we can find all the treasures!' },
+                { speaker: 'mina', text: 'This place is so cool! Like a real theme park!' },
+                { speaker: 'mina', text: 'Stay close to me, those mummies look scary!' },
+                { speaker: 'mina', text: 'I wonder what\'s inside that pyramid!' },
+                { speaker: 'mina', text: 'Look how the lights change as it gets dark!' },
+                { speaker: 'mina', text: 'Race you to that roller coaster!' },
+                { speaker: 'mina', text: 'This is the best adventure ever!' },
+                
+                // Sacha responding  
+                { speaker: 'sacha', text: 'Yeah! It\'s like we\'re in a movie!' },
+                { speaker: 'sacha', text: 'Don\'t worry Mina, I\'ll help you find them!' },
+                { speaker: 'sacha', text: 'I love all the bright colors everywhere!' },
+                { speaker: 'sacha', text: 'I\'m right behind you! Let\'s stick together!' },
+                { speaker: 'sacha', text: 'Maybe there\'s treasure hidden in there!' },
+                { speaker: 'sacha', text: 'It\'s getting so mysterious and spooky!' },
+                { speaker: 'sacha', text: 'You\'re on! But wait for me!' },
+                { speaker: 'sacha', text: 'Best friends forever, Mina!' }
+            ],
+            lastSpeechTime: 0,
+            speechInterval: 8000, // 8 seconds between speeches
+            nextDialogueIndex: 0
+        };
+        
         this.init();
         this.setupEventListeners();
         this.createMina();
@@ -1558,73 +1587,113 @@ class MinaAdventureGame {
         const runButton = document.getElementById('runButton');
         const cameraButton = document.getElementById('cameraButton');
         
-        if (!joystick || !joystickHandle) return;
+        if (!joystick || !joystickHandle) {
+            console.log('Mobile controls elements not found');
+            return;
+        }
         
         let joystickCenter = { x: 0, y: 0 };
         let isDragging = false;
+        let startTouch = null;
+        
+        console.log('Setting up mobile joystick controls');
         
         // Calculate joystick center
         const updateJoystickCenter = () => {
             const rect = joystick.getBoundingClientRect();
             joystickCenter.x = rect.left + rect.width / 2;
             joystickCenter.y = rect.top + rect.height / 2;
+            console.log('Joystick center:', joystickCenter);
         };
         
-        // Touch start
+        // Improved touch handling for mobile
         joystick.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            
             isDragging = true;
+            startTouch = e.touches[0];
             updateJoystickCenter();
             this.mobileControls.joystick.active = true;
-        });
+            
+            console.log('Touch start on joystick');
+            
+            // Visual feedback
+            joystick.style.backgroundColor = 'rgba(255,255,255,0.3)';
+        }, { passive: false });
         
-        // Touch move
-        document.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
+        // Handle touch move on the joystick itself
+        joystick.addEventListener('touchmove', (e) => {
+            if (!isDragging || !startTouch) return;
             e.preventDefault();
+            e.stopPropagation();
             
             const touch = e.touches[0];
             const deltaX = touch.clientX - joystickCenter.x;
             const deltaY = touch.clientY - joystickCenter.y;
             const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            const maxDistance = 40; // Joystick radius
+            const maxDistance = 50; // Increased for easier control
             
+            console.log('Touch move:', { deltaX, deltaY, distance });
+            
+            let finalX, finalY;
             if (distance <= maxDistance) {
+                finalX = deltaX;
+                finalY = deltaY;
                 this.mobileControls.joystick.x = deltaX / maxDistance;
                 this.mobileControls.joystick.y = deltaY / maxDistance;
-                joystickHandle.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
             } else {
                 const angle = Math.atan2(deltaY, deltaX);
-                const limitedX = Math.cos(angle) * maxDistance;
-                const limitedY = Math.sin(angle) * maxDistance;
-                this.mobileControls.joystick.x = limitedX / maxDistance;
-                this.mobileControls.joystick.y = limitedY / maxDistance;
-                joystickHandle.style.transform = `translate(calc(-50% + ${limitedX}px), calc(-50% + ${limitedY}px))`;
+                finalX = Math.cos(angle) * maxDistance;
+                finalY = Math.sin(angle) * maxDistance;
+                this.mobileControls.joystick.x = finalX / maxDistance;
+                this.mobileControls.joystick.y = finalY / maxDistance;
             }
             
-            // Convert joystick to movement controls
-            const threshold = 0.3;
+            joystickHandle.style.transform = `translate(calc(-50% + ${finalX}px), calc(-50% + ${finalY}px))`;
+            
+            // Convert joystick to movement controls with lower threshold
+            const threshold = 0.2;
             this.controls.forward = this.mobileControls.joystick.y < -threshold;
             this.controls.backward = this.mobileControls.joystick.y > threshold;
             this.controls.left = this.mobileControls.joystick.x < -threshold;
             this.controls.right = this.mobileControls.joystick.x > threshold;
-        });
+            
+            console.log('Controls:', this.controls);
+        }, { passive: false });
         
         // Touch end
-        document.addEventListener('touchend', (e) => {
+        const handleTouchEnd = (e) => {
             if (!isDragging) return;
+            
             isDragging = false;
+            startTouch = null;
             this.mobileControls.joystick.active = false;
             this.mobileControls.joystick.x = 0;
             this.mobileControls.joystick.y = 0;
             joystickHandle.style.transform = 'translate(-50%, -50%)';
+            
+            // Reset visual feedback
+            joystick.style.backgroundColor = 'rgba(0,0,0,0.3)';
             
             // Reset movement controls
             this.controls.forward = false;
             this.controls.backward = false;
             this.controls.left = false;
             this.controls.right = false;
-        });
+            
+            console.log('Touch ended, controls reset');
+        };
+        
+        joystick.addEventListener('touchend', handleTouchEnd, { passive: false });
+        joystick.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+        
+        // Prevent scrolling when touching joystick area
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+            }
+        }, { passive: false });
         
         // Run button
         if (runButton) {
@@ -1682,6 +1751,96 @@ class MinaAdventureGame {
         });
         
         console.log('Mobile touch controls initialized');
+    }
+    
+    createSpeechBubble(speaker, text) {
+        // Remove existing bubble
+        if (this.speechSystem.currentBubble) {
+            this.removeSpeechBubble();
+        }
+        
+        // Create new bubble
+        const bubble = document.createElement('div');
+        bubble.className = `speech-bubble ${speaker}`;
+        bubble.textContent = text;
+        bubble.style.display = 'none'; // Initially hidden for positioning
+        
+        document.body.appendChild(bubble);
+        this.speechSystem.currentBubble = bubble;
+        
+        // Position the bubble above the speaking character
+        this.updateSpeechBubblePosition(speaker, bubble);
+        
+        // Show bubble with animation
+        bubble.style.display = 'block';
+        
+        // Auto-remove after 6 seconds
+        setTimeout(() => {
+            if (this.speechSystem.currentBubble === bubble) {
+                this.removeSpeechBubble();
+            }
+        }, 6000);
+    }
+    
+    updateSpeechBubblePosition(speaker, bubble) {
+        if (!bubble) return;
+        
+        // Get the speaking character
+        const character = speaker === 'mina' ? this.mina : this.sacha;
+        if (!character) return;
+        
+        // Project 3D position to 2D screen coordinates
+        const characterPosition = character.position.clone();
+        characterPosition.y += 8; // Above character's head
+        
+        const screenPosition = characterPosition.clone();
+        screenPosition.project(this.camera);
+        
+        // Convert to screen coordinates
+        const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (screenPosition.y * -0.5 + 0.5) * window.innerHeight;
+        
+        // Position bubble, ensuring it stays on screen
+        const bubbleRect = bubble.getBoundingClientRect();
+        const finalX = Math.max(10, Math.min(x - bubbleRect.width / 2, window.innerWidth - bubbleRect.width - 10));
+        const finalY = Math.max(10, y - bubbleRect.height - 20);
+        
+        bubble.style.left = finalX + 'px';
+        bubble.style.top = finalY + 'px';
+    }
+    
+    removeSpeechBubble() {
+        if (this.speechSystem.currentBubble) {
+            this.speechSystem.currentBubble.classList.add('fade-out');
+            const bubbleToRemove = this.speechSystem.currentBubble;
+            setTimeout(() => {
+                if (bubbleToRemove.parentNode) {
+                    bubbleToRemove.parentNode.removeChild(bubbleToRemove);
+                }
+            }, 500);
+            this.speechSystem.currentBubble = null;
+        }
+    }
+    
+    updateSpeechSystem() {
+        const currentTime = Date.now();
+        
+        // Update bubble position if one exists
+        if (this.speechSystem.currentBubble) {
+            const speaker = this.speechSystem.currentBubble.classList.contains('mina') ? 'mina' : 'sacha';
+            this.updateSpeechBubblePosition(speaker, this.speechSystem.currentBubble);
+        }
+        
+        // Check if it's time for a new dialogue
+        if (currentTime - this.speechSystem.lastSpeechTime > this.speechSystem.speechInterval) {
+            if (!this.speechSystem.currentBubble && this.mina && this.sacha) {
+                const dialogue = this.speechSystem.dialogues[this.speechSystem.nextDialogueIndex];
+                this.createSpeechBubble(dialogue.speaker, dialogue.text);
+                
+                this.speechSystem.lastSpeechTime = currentTime;
+                this.speechSystem.nextDialogueIndex = (this.speechSystem.nextDialogueIndex + 1) % this.speechSystem.dialogues.length;
+            }
+        }
     }
     
     checkCollision(newPosition) {
@@ -2203,6 +2362,9 @@ class MinaAdventureGame {
         
         // Update dynamic lighting
         this.updateDynamicLighting();
+        
+        // Update speech system
+        this.updateSpeechSystem();
         
         this.updateUI();
         this.renderer.render(this.scene, this.camera);
