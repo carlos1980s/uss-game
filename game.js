@@ -1582,155 +1582,121 @@ class MinaAdventureGame {
     }
     
     setupMobileControls() {
-        const joystick = document.getElementById('movementJoystick');
-        const joystickHandle = document.getElementById('joystickHandle');
+        // Get arrow button elements
+        const upButton = document.getElementById('upButton');
+        const downButton = document.getElementById('downButton');
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
         const runButton = document.getElementById('runButton');
         const cameraButton = document.getElementById('cameraButton');
+        const touchArea = document.getElementById('touchArea');
         
-        if (!joystick || !joystickHandle) {
-            console.log('Mobile controls elements not found');
+        if (!upButton || !downButton || !leftButton || !rightButton) {
+            console.log('Arrow button elements not found');
             return;
         }
         
-        let joystickCenter = { x: 0, y: 0 };
-        let isDragging = false;
-        let startTouch = null;
+        console.log('Setting up mobile arrow button controls');
         
-        console.log('Setting up mobile joystick controls');
-        
-        // Calculate joystick center
-        const updateJoystickCenter = () => {
-            const rect = joystick.getBoundingClientRect();
-            joystickCenter.x = rect.left + rect.width / 2;
-            joystickCenter.y = rect.top + rect.height / 2;
-            console.log('Joystick center:', joystickCenter);
-        };
-        
-        // Improved touch handling for mobile
-        joystick.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+        // Arrow button handlers - much simpler and more reliable
+        const setupButtonControls = (button, controlName, value = true) => {
+            if (!button) return;
             
-            isDragging = true;
-            startTouch = e.touches[0];
-            updateJoystickCenter();
-            this.mobileControls.joystick.active = true;
-            
-            console.log('Touch start on joystick');
-            
-            // Visual feedback
-            joystick.style.backgroundColor = 'rgba(255,255,255,0.3)';
-        }, { passive: false });
-        
-        // Handle touch move on the joystick itself
-        joystick.addEventListener('touchmove', (e) => {
-            if (!isDragging || !startTouch) return;
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const touch = e.touches[0];
-            const deltaX = touch.clientX - joystickCenter.x;
-            const deltaY = touch.clientY - joystickCenter.y;
-            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            const maxDistance = 50; // Increased for easier control
-            
-            console.log('Touch move:', { deltaX, deltaY, distance });
-            
-            let finalX, finalY;
-            if (distance <= maxDistance) {
-                finalX = deltaX;
-                finalY = deltaY;
-                this.mobileControls.joystick.x = deltaX / maxDistance;
-                this.mobileControls.joystick.y = deltaY / maxDistance;
-            } else {
-                const angle = Math.atan2(deltaY, deltaX);
-                finalX = Math.cos(angle) * maxDistance;
-                finalY = Math.sin(angle) * maxDistance;
-                this.mobileControls.joystick.x = finalX / maxDistance;
-                this.mobileControls.joystick.y = finalY / maxDistance;
-            }
-            
-            joystickHandle.style.transform = `translate(calc(-50% + ${finalX}px), calc(-50% + ${finalY}px))`;
-            
-            // Convert joystick to movement controls with lower threshold
-            const threshold = 0.2;
-            this.controls.forward = this.mobileControls.joystick.y < -threshold;
-            this.controls.backward = this.mobileControls.joystick.y > threshold;
-            this.controls.left = this.mobileControls.joystick.x < -threshold;
-            this.controls.right = this.mobileControls.joystick.x > threshold;
-            
-            console.log('Controls:', this.controls);
-        }, { passive: false });
-        
-        // Touch end
-        const handleTouchEnd = (e) => {
-            if (!isDragging) return;
-            
-            isDragging = false;
-            startTouch = null;
-            this.mobileControls.joystick.active = false;
-            this.mobileControls.joystick.x = 0;
-            this.mobileControls.joystick.y = 0;
-            joystickHandle.style.transform = 'translate(-50%, -50%)';
-            
-            // Reset visual feedback
-            joystick.style.backgroundColor = 'rgba(0,0,0,0.3)';
-            
-            // Reset movement controls
-            this.controls.forward = false;
-            this.controls.backward = false;
-            this.controls.left = false;
-            this.controls.right = false;
-            
-            console.log('Touch ended, controls reset');
-        };
-        
-        joystick.addEventListener('touchend', handleTouchEnd, { passive: false });
-        joystick.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-        
-        // Prevent scrolling when touching joystick area
-        document.addEventListener('touchmove', (e) => {
-            if (isDragging) {
+            const startHandler = (e) => {
                 e.preventDefault();
-            }
-        }, { passive: false });
+                e.stopPropagation();
+                this.controls[controlName] = value;
+                button.style.background = 'rgba(255,255,255,0.6)';
+                button.style.transform = 'scale(0.9)';
+                console.log(`${controlName} started`);
+            };
+            
+            const endHandler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.controls[controlName] = false;
+                button.style.background = 'rgba(0,0,0,0.4)';
+                button.style.transform = 'scale(1)';
+                console.log(`${controlName} ended`);
+            };
+            
+            // Touch events
+            button.addEventListener('touchstart', startHandler, { passive: false });
+            button.addEventListener('touchend', endHandler, { passive: false });
+            button.addEventListener('touchcancel', endHandler, { passive: false });
+            
+            // Mouse events for testing on desktop
+            button.addEventListener('mousedown', startHandler);
+            button.addEventListener('mouseup', endHandler);
+            button.addEventListener('mouseleave', endHandler);
+        };
+        
+        // Setup each direction button
+        setupButtonControls(upButton, 'forward');
+        setupButtonControls(downButton, 'backward');
+        setupButtonControls(leftButton, 'left');
+        setupButtonControls(rightButton, 'right');
         
         // Run button
         if (runButton) {
-            runButton.addEventListener('touchstart', (e) => {
+            const runStart = (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 this.controls.run = true;
                 this.mobileControls.run = true;
-            });
+                runButton.style.background = 'rgba(255,255,255,0.6)';
+                runButton.style.transform = 'scale(0.9)';
+            };
             
-            runButton.addEventListener('touchend', (e) => {
+            const runEnd = (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 this.controls.run = false;
                 this.mobileControls.run = false;
-            });
+                runButton.style.background = 'rgba(0,0,0,0.4)';
+                runButton.style.transform = 'scale(1)';
+            };
+            
+            runButton.addEventListener('touchstart', runStart, { passive: false });
+            runButton.addEventListener('touchend', runEnd, { passive: false });
+            runButton.addEventListener('touchcancel', runEnd, { passive: false });
+            runButton.addEventListener('mousedown', runStart);
+            runButton.addEventListener('mouseup', runEnd);
+            runButton.addEventListener('mouseleave', runEnd);
         }
         
         // Camera button for mobile camera controls
         if (cameraButton) {
-            cameraButton.addEventListener('touchstart', (e) => {
+            const toggleCamera = (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 this.mobileControls.cameraMode = !this.mobileControls.cameraMode;
                 cameraButton.style.background = this.mobileControls.cameraMode ? 
-                    'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.3)';
-            });
+                    'rgba(255,255,0,0.6)' : 'rgba(0,0,0,0.4)';
+                console.log('Camera mode:', this.mobileControls.cameraMode ? 'ON' : 'OFF');
+            };
+            
+            cameraButton.addEventListener('touchstart', toggleCamera, { passive: false });
+            cameraButton.addEventListener('mousedown', toggleCamera);
         }
         
-        // Touch camera controls
+        // Touch camera controls - swipe anywhere to rotate camera
         let lastTouchX = 0, lastTouchY = 0;
-        this.renderer.domElement.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1 && this.mobileControls.cameraMode) {
+        let isCameraDragging = false;
+        
+        // Use the main game canvas for camera controls
+        const canvas = this.renderer.domElement;
+        
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
                 lastTouchX = e.touches[0].clientX;
                 lastTouchY = e.touches[0].clientY;
+                isCameraDragging = true;
             }
-        });
+        }, { passive: true });
         
-        this.renderer.domElement.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1 && this.mobileControls.cameraMode) {
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isCameraDragging) {
                 e.preventDefault();
                 const touch = e.touches[0];
                 const deltaX = touch.clientX - lastTouchX;
@@ -1741,16 +1707,29 @@ class MinaAdventureGame {
                     this.cameraRotation = { horizontal: 0, vertical: 0 };
                 }
                 
-                this.cameraRotation.horizontal -= deltaX * 0.005;
-                this.cameraRotation.vertical -= deltaY * 0.005;
+                // Make camera more responsive
+                this.cameraRotation.horizontal -= deltaX * 0.01;
+                this.cameraRotation.vertical -= deltaY * 0.01;
                 this.cameraRotation.vertical = Math.max(-Math.PI/3, Math.min(Math.PI/3, this.cameraRotation.vertical));
                 
                 lastTouchX = touch.clientX;
                 lastTouchY = touch.clientY;
             }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', (e) => {
+            isCameraDragging = false;
         });
         
-        console.log('Mobile touch controls initialized');
+        // Prevent default touch behaviors that might interfere
+        document.addEventListener('touchmove', (e) => {
+            // Only prevent if touching control elements
+            if (e.target.closest('#mobileControls') || e.target === canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        console.log('Mobile arrow button controls initialized successfully');
     }
     
     createSpeechBubble(speaker, text) {
