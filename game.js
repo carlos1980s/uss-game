@@ -258,23 +258,97 @@ class MinaAdventureGame {
             characterGroup.add(strand);
         }
         
-        // More detailed arms
-        const armGeometry = new THREE.CylinderGeometry(0.05, 0.04, 0.3, 8);
+        // Enhanced arms with upper and lower sections
+        const upperArmGeometry = new THREE.CylinderGeometry(0.055, 0.05, 0.18, 8);
+        const forearmGeometry = new THREE.CylinderGeometry(0.045, 0.04, 0.15, 8);
         const armMaterial = new THREE.MeshPhongMaterial({ 
             color: 0xffdbac,
             shininess: 20,
             specular: 0x333333
         });
         
-        const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-        leftArm.position.set(-0.25, 0.35, 0);
-        leftArm.castShadow = true;
-        characterGroup.add(leftArm);
+        // Left arm
+        const leftUpperArm = new THREE.Mesh(upperArmGeometry, armMaterial);
+        leftUpperArm.position.set(-0.25, 0.45, 0);
+        leftUpperArm.castShadow = true;
+        leftUpperArm.name = 'leftUpperArm';
+        characterGroup.add(leftUpperArm);
         
-        const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-        rightArm.position.set(0.25, 0.35, 0);
-        rightArm.castShadow = true;
-        characterGroup.add(rightArm);
+        const leftForearm = new THREE.Mesh(forearmGeometry, armMaterial);
+        leftForearm.position.set(-0.25, 0.22, 0);
+        leftForearm.castShadow = true;
+        leftForearm.name = 'leftForearm';
+        characterGroup.add(leftForearm);
+        
+        // Right arm
+        const rightUpperArm = new THREE.Mesh(upperArmGeometry, armMaterial);
+        rightUpperArm.position.set(0.25, 0.45, 0);
+        rightUpperArm.castShadow = true;
+        rightUpperArm.name = 'rightUpperArm';
+        characterGroup.add(rightUpperArm);
+        
+        const rightForearm = new THREE.Mesh(forearmGeometry, armMaterial);
+        rightForearm.position.set(0.25, 0.22, 0);
+        rightForearm.castShadow = true;
+        rightForearm.name = 'rightForearm';
+        characterGroup.add(rightForearm);
+        
+        // Enhanced hands with fingers
+        const handGeometry = new THREE.SphereGeometry(0.04, 10, 8);
+        const handMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xffdbac,
+            shininess: 25,
+            specular: 0x444444
+        });
+        
+        // Left hand
+        const leftHand = new THREE.Mesh(handGeometry, handMaterial);
+        leftHand.position.set(-0.25, 0.12, 0);
+        leftHand.castShadow = true;
+        leftHand.name = 'leftHand';
+        characterGroup.add(leftHand);
+        
+        // Right hand
+        const rightHand = new THREE.Mesh(handGeometry, handMaterial);
+        rightHand.position.set(0.25, 0.12, 0);
+        rightHand.castShadow = true;
+        rightHand.name = 'rightHand';
+        characterGroup.add(rightHand);
+        
+        // Add individual fingers to both hands
+        const fingerGeometry = new THREE.CylinderGeometry(0.008, 0.006, 0.04, 4);
+        const fingerMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xffdbac,
+            shininess: 30
+        });
+        
+        // Left hand fingers
+        for (let i = 0; i < 5; i++) {
+            const finger = new THREE.Mesh(fingerGeometry, fingerMaterial);
+            const angle = (i - 2) * 0.3;
+            finger.position.set(
+                -0.25 + Math.sin(angle) * 0.035,
+                0.08,
+                Math.cos(angle) * 0.035
+            );
+            finger.rotation.z = angle;
+            finger.castShadow = true;
+            characterGroup.add(finger);
+        }
+        
+        // Right hand fingers
+        for (let i = 0; i < 5; i++) {
+            const finger = new THREE.Mesh(fingerGeometry, fingerMaterial);
+            const angle = (i - 2) * 0.3;
+            finger.position.set(
+                0.25 + Math.sin(angle) * 0.035,
+                0.08,
+                Math.cos(angle) * 0.035
+            );
+            finger.rotation.z = -angle;
+            finger.castShadow = true;
+            characterGroup.add(finger);
+        }
         
         // Enhanced legs
         const legGeometry = new THREE.CylinderGeometry(0.06, 0.05, 0.4, 8);
@@ -451,6 +525,32 @@ class MinaAdventureGame {
         // Position character
         characterGroup.position.copy(position);
         characterGroup.userData.name = name;
+        
+        // Add animation properties
+        characterGroup.userData.animations = {
+            idle: { time: 0, speed: 1 },
+            walking: { time: 0, speed: 2 },
+            jumping: { time: 0, speed: 4 },
+            scared: { time: 0, speed: 8 },
+            laughing: { time: 0, speed: 6 },
+            currentState: 'idle',
+            isAnimating: false,
+            animationDuration: 0,
+            originalY: position.y
+        };
+        
+        // Store references to body parts for animation
+        characterGroup.userData.bodyParts = {
+            head: characterGroup.children.find(child => child.geometry instanceof THREE.SphereGeometry),
+            leftUpperArm: characterGroup.children.find(child => child.name === 'leftUpperArm'),
+            rightUpperArm: characterGroup.children.find(child => child.name === 'rightUpperArm'),
+            leftForearm: characterGroup.children.find(child => child.name === 'leftForearm'),
+            rightForearm: characterGroup.children.find(child => child.name === 'rightForearm'),
+            leftHand: characterGroup.children.find(child => child.name === 'leftHand'),
+            rightHand: characterGroup.children.find(child => child.name === 'rightHand'),
+            body: characterGroup.children.find(child => child.geometry instanceof THREE.BoxGeometry)
+        };
+        
         this.scene.add(characterGroup);
         
         console.log(`Character ${name} created successfully:`, {
@@ -1608,7 +1708,7 @@ class MinaAdventureGame {
                 this.controls[controlName] = value;
                 button.style.background = 'rgba(255,255,255,0.6)';
                 button.style.transform = 'scale(0.9)';
-                console.log(`${controlName} started`);
+                console.log(`${controlName} started - Controls state:`, this.controls);
             };
             
             const endHandler = (e) => {
@@ -1846,6 +1946,8 @@ class MinaAdventureGame {
         // Safety check - ensure Mina exists
         if (!this.mina) {
             console.warn('updateMinaMovement called but Mina does not exist');
+            console.log('Mina object:', this.mina);
+            console.log('Available objects:', Object.keys(this));
             return;
         }
         
