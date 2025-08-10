@@ -110,15 +110,11 @@ class MinaAdventureGame {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0xff4500); // Beautiful sunset orange sky
         
-        // Mobile performance optimizations
-        if (this.isMobile) {
-            this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio
-            this.renderer.shadowMap.enabled = false; // Disable shadows on mobile
-            console.log('Mobile optimizations enabled');
-        } else {
-            this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        }
+        // Aggressive mobile performance optimizations
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limit pixel ratio even more
+        this.renderer.shadowMap.enabled = false; // Disable shadows completely for performance
+        this.renderer.powerPreference = 'low-power'; // Force low-power mode
+        console.log('🚀 Mobile optimizations enabled for all devices');
         
         const container = document.getElementById('gameContainer');
         if (!container) {
@@ -1675,161 +1671,144 @@ class MinaAdventureGame {
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Mobile touch controls
-        if (this.isMobile) {
-            this.setupMobileControls();
-        }
+        // Always setup mobile controls for debugging
+        console.log('🔧 Force enabling mobile controls for all devices...');
+        this.setupMobileControls();
     }
     
     setupMobileControls() {
-        // Get arrow button elements
-        const upButton = document.getElementById('upButton');
-        const downButton = document.getElementById('downButton');
-        const leftButton = document.getElementById('leftButton');
-        const rightButton = document.getElementById('rightButton');
-        const runButton = document.getElementById('runButton');
-        const cameraButton = document.getElementById('cameraButton');
-        const touchArea = document.getElementById('touchArea');
+        console.log('🔧 Setting up Android-optimized mobile controls...');
+        console.log('User Agent:', navigator.userAgent);
+        console.log('Is Mobile:', this.isMobile);
         
-        if (!upButton || !downButton || !leftButton || !rightButton) {
-            console.log('Arrow button elements not found');
+        // Force show mobile controls always for debugging
+        const mobileControls = document.getElementById('mobileControls');
+        if (mobileControls) {
+            mobileControls.style.display = 'block';
+            mobileControls.style.opacity = '1';
+            console.log('✅ Mobile controls container visible');
+        } else {
+            console.error('❌ Mobile controls container not found!');
             return;
         }
         
-        console.log('Setting up mobile arrow button controls');
-        
-        // Arrow button handlers - much simpler and more reliable
-        const setupButtonControls = (button, controlName, value = true) => {
-            if (!button) return;
-            
-            const startHandler = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.controls[controlName] = value;
-                button.style.background = 'rgba(255,255,255,0.6)';
-                button.style.transform = 'scale(0.9)';
-                console.log(`${controlName} started - Controls state:`, this.controls);
-            };
-            
-            const endHandler = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.controls[controlName] = false;
-                button.style.background = 'rgba(0,0,0,0.4)';
-                button.style.transform = 'scale(1)';
-                console.log(`${controlName} ended`);
-            };
-            
-            // Touch events
-            button.addEventListener('touchstart', startHandler, { passive: false });
-            button.addEventListener('touchend', endHandler, { passive: false });
-            button.addEventListener('touchcancel', endHandler, { passive: false });
-            
-            // Mouse events for testing on desktop
-            button.addEventListener('mousedown', startHandler);
-            button.addEventListener('mouseup', endHandler);
-            button.addEventListener('mouseleave', endHandler);
+        // Get arrow button elements with detailed logging
+        const buttons = {
+            up: document.getElementById('upButton'),
+            down: document.getElementById('downButton'),
+            left: document.getElementById('leftButton'),
+            right: document.getElementById('rightButton'),
+            run: document.getElementById('runButton'),
+            camera: document.getElementById('cameraButton')
         };
         
-        // Setup each direction button
-        setupButtonControls(upButton, 'forward');
-        setupButtonControls(downButton, 'backward');
-        setupButtonControls(leftButton, 'left');
-        setupButtonControls(rightButton, 'right');
+        console.log('Button elements found:', Object.keys(buttons).filter(key => buttons[key]));
+        console.log('Missing buttons:', Object.keys(buttons).filter(key => !buttons[key]));
         
-        // Run button
-        if (runButton) {
-            const runStart = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.controls.run = true;
-                this.mobileControls.run = true;
-                runButton.style.background = 'rgba(255,255,255,0.6)';
-                runButton.style.transform = 'scale(0.9)';
-            };
-            
-            const runEnd = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.controls.run = false;
-                this.mobileControls.run = false;
-                runButton.style.background = 'rgba(0,0,0,0.4)';
-                runButton.style.transform = 'scale(1)';
-            };
-            
-            runButton.addEventListener('touchstart', runStart, { passive: false });
-            runButton.addEventListener('touchend', runEnd, { passive: false });
-            runButton.addEventListener('touchcancel', runEnd, { passive: false });
-            runButton.addEventListener('mousedown', runStart);
-            runButton.addEventListener('mouseup', runEnd);
-            runButton.addEventListener('mouseleave', runEnd);
-        }
-        
-        // Camera button for mobile camera controls
-        if (cameraButton) {
-            const toggleCamera = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.mobileControls.cameraMode = !this.mobileControls.cameraMode;
-                cameraButton.style.background = this.mobileControls.cameraMode ? 
-                    'rgba(255,255,0,0.6)' : 'rgba(0,0,0,0.4)';
-                console.log('Camera mode:', this.mobileControls.cameraMode ? 'ON' : 'OFF');
-            };
-            
-            cameraButton.addEventListener('touchstart', toggleCamera, { passive: false });
-            cameraButton.addEventListener('mousedown', toggleCamera);
-        }
-        
-        // Touch camera controls - swipe anywhere to rotate camera
-        let lastTouchX = 0, lastTouchY = 0;
-        let isCameraDragging = false;
-        
-        // Use the main game canvas for camera controls
-        const canvas = this.renderer.domElement;
-        
-        canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) {
-                lastTouchX = e.touches[0].clientX;
-                lastTouchY = e.touches[0].clientY;
-                isCameraDragging = true;
-            }
-        }, { passive: true });
-        
-        canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1 && isCameraDragging) {
-                e.preventDefault();
-                const touch = e.touches[0];
-                const deltaX = touch.clientX - lastTouchX;
-                const deltaY = touch.clientY - lastTouchY;
-                
-                // Update camera rotation
-                if (!this.cameraRotation) {
-                    this.cameraRotation = { horizontal: 0, vertical: 0 };
+        // Universal event handler that works on both touch and mouse
+        const createControlHandler = (controlName) => {
+            return {
+                start: (e) => {
+                    console.log(`🎮 ${controlName} button pressed!`);
+                    if (e.preventDefault) e.preventDefault();
+                    if (e.stopPropagation) e.stopPropagation();
+                    
+                    // Force set the control
+                    this.controls[controlName] = true;
+                    console.log('Current controls:', this.controls);
+                    
+                    // Visual feedback
+                    if (e.target) {
+                        e.target.style.background = 'rgba(255,0,0,0.8)'; // Bright red for visibility
+                        e.target.style.transform = 'scale(1.2)';
+                    }
+                },
+                end: (e) => {
+                    console.log(`🎮 ${controlName} button released!`);
+                    if (e.preventDefault) e.preventDefault();
+                    if (e.stopPropagation) e.stopPropagation();
+                    
+                    this.controls[controlName] = false;
+                    console.log('Current controls:', this.controls);
+                    
+                    // Reset visual feedback
+                    if (e.target) {
+                        e.target.style.background = 'rgba(0,0,0,0.4)';
+                        e.target.style.transform = 'scale(1)';
+                    }
                 }
-                
-                // Make camera more responsive
-                this.cameraRotation.horizontal -= deltaX * 0.01;
-                this.cameraRotation.vertical -= deltaY * 0.01;
-                this.cameraRotation.vertical = Math.max(-Math.PI/3, Math.min(Math.PI/3, this.cameraRotation.vertical));
-                
-                lastTouchX = touch.clientX;
-                lastTouchY = touch.clientY;
-            }
-        }, { passive: false });
+            };
+        };
         
-        canvas.addEventListener('touchend', (e) => {
-            isCameraDragging = false;
+        // Setup movement controls with robust event binding
+        const movements = [
+            { button: buttons.up, control: 'forward' },
+            { button: buttons.down, control: 'backward' },
+            { button: buttons.left, control: 'left' },
+            { button: buttons.right, control: 'right' }
+        ];
+        
+        movements.forEach(({ button, control }) => {
+            if (button) {
+                const handler = createControlHandler(control);
+                
+                // Multiple event types for maximum compatibility
+                const startEvents = ['touchstart', 'mousedown', 'pointerdown'];
+                const endEvents = ['touchend', 'touchcancel', 'mouseup', 'mouseleave', 'pointerup', 'pointercancel'];
+                
+                startEvents.forEach(eventType => {
+                    button.addEventListener(eventType, handler.start, { 
+                        passive: false, 
+                        capture: true 
+                    });
+                });
+                
+                endEvents.forEach(eventType => {
+                    button.addEventListener(eventType, handler.end, { 
+                        passive: false, 
+                        capture: true 
+                    });
+                });
+                
+                console.log(`✅ Events bound to ${control} button`);
+            } else {
+                console.error(`❌ ${control} button not found!`);
+            }
         });
         
-        // Prevent default touch behaviors that might interfere
+        // Run button
+        if (buttons.run) {
+            const runHandler = createControlHandler('run');
+            ['touchstart', 'mousedown'].forEach(event => {
+                buttons.run.addEventListener(event, runHandler.start, { passive: false });
+            });
+            ['touchend', 'touchcancel', 'mouseup'].forEach(event => {
+                buttons.run.addEventListener(event, runHandler.end, { passive: false });
+            });
+        }
+        
+        // Disable scrolling and zoom on mobile
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+        
+        // Prevent default behaviors
         document.addEventListener('touchmove', (e) => {
-            // Only prevent if touching control elements
-            if (e.target.closest('#mobileControls') || e.target === canvas) {
-                e.preventDefault();
+            e.preventDefault();
+        }, { passive: false });
+        
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) {
+                e.preventDefault(); // Prevent pinch zoom
             }
         }, { passive: false });
         
-        console.log('Mobile arrow button controls initialized successfully');
+        // Force enable movement regardless of mouse lock for mobile
+        this.mouseLocked = true; // Force enable movement
+        
+        console.log('🚀 Android-optimized mobile controls setup complete!');
+        console.log('Final control state:', this.controls);
     }
     
     createSpeechBubble(speaker, text) {

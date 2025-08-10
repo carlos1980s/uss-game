@@ -195,22 +195,40 @@
             z-index: 1;
         }
         
-        /* Hide mobile controls on desktop */
-        @media (min-width: 768px) {
-            #mobileControls { display: none !important; }
-        }
-        
-        /* Show mobile controls on mobile */
-        @media (max-width: 767px) {
-            #mobileControls { display: block !important; }
-            #instructions { font-size: 12px; }
-            #console { font-size: 10px; max-width: 200px; }
-        }
-        
-        /* Temporarily show mobile controls for testing */
+        /* Force mobile controls always visible for Android debugging */
         #mobileControls { 
             display: block !important; 
-            opacity: 0.8;
+            opacity: 1 !important;
+            z-index: 9999 !important;
+        }
+        
+        /* Enhanced button visibility */
+        .arrow-button {
+            background: rgba(255, 255, 255, 0.8) !important;
+            border: 3px solid #000 !important;
+            color: #000 !important;
+            font-size: 24px !important;
+            font-weight: bold !important;
+        }
+        
+        .mobile-button {
+            background: rgba(255, 255, 255, 0.8) !important;
+            border: 3px solid #000 !important;
+            color: #000 !important;
+        }
+        
+        /* Prevent body scrolling on mobile */
+        body {
+            overflow: hidden !important;
+            position: fixed !important;
+            width: 100% !important;
+            height: 100% !important;
+            touch-action: none !important;
+        }
+        
+        /* Optimize for Android Chrome */
+        canvas {
+            touch-action: none !important;
         }
         
         /* Comic Speech Bubbles */
