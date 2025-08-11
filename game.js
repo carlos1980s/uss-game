@@ -542,6 +542,8 @@ class MinaAdventureGame {
             jumping: { time: 0, speed: 4 },
             scared: { time: 0, speed: 8 },
             laughing: { time: 0, speed: 6 },
+            waving: { time: 0, speed: 4 },
+            dancing: { time: 0, speed: 5 },
             currentState: 'idle',
             isAnimating: false,
             animationDuration: 0,
@@ -1482,7 +1484,10 @@ class MinaAdventureGame {
                 targetPosition: new THREE.Vector3(),
                 speed: 3 + Math.random() * 2,
                 detectionRadius: 15,
-                chasing: false
+                chasing: false,
+                originalY: monster.position.y,
+                spawnPosition: new THREE.Vector3(spawn.x, monster.position.y, spawn.z),
+                aiState: 'patrolling'
             };
             this.monsters.push(monster);
         });
@@ -1809,7 +1814,9 @@ class MinaAdventureGame {
             // Castle ride in Far Far Away
             { x: -75, z: 75, type: 'family', name: 'Shrek 4-D Adventure' },
             // Water ride in Lost World
-            { x: -75, z: -75, type: 'water', name: 'Jurassic Park Rapids' }
+            { x: -75, z: -75, type: 'water', name: 'Jurassic Park Rapids' },
+            // NEW: Haunted Mansion in Hollywood
+            { x: 75, z: 75, type: 'haunted', name: 'Haunted Hollywood Mansion' }
         ];
         
         rides.forEach(rideData => {
@@ -1875,6 +1882,52 @@ class MinaAdventureGame {
                 splash.scale.y = 0.3;
                 rideGroup.add(splash);
                 break;
+                
+            case 'haunted':
+                // Spooky Victorian mansion
+                const hauntedBaseGeometry = new THREE.BoxGeometry(6, 4, 6);
+                const hauntedBaseMaterial = new THREE.MeshPhongMaterial({ color: 0x2d2d2d });
+                const hauntedBase = new THREE.Mesh(hauntedBaseGeometry, hauntedBaseMaterial);
+                hauntedBase.position.y = 2.5;
+                rideGroup.add(hauntedBase);
+                
+                // Gothic roof
+                const hauntedRoofGeometry = new THREE.ConeGeometry(4.5, 3, 4);
+                const hauntedRoofMaterial = new THREE.MeshPhongMaterial({ color: 0x1a1a1a });
+                const hauntedRoof = new THREE.Mesh(hauntedRoofGeometry, hauntedRoofMaterial);
+                hauntedRoof.position.y = 5.5;
+                hauntedRoof.rotation.y = Math.PI / 4;
+                rideGroup.add(hauntedRoof);
+                
+                // Spooky tower
+                const hauntedTowerGeometry = new THREE.CylinderGeometry(1, 1.2, 5);
+                const hauntedTowerMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                const hauntedTower = new THREE.Mesh(hauntedTowerGeometry, hauntedTowerMaterial);
+                hauntedTower.position.set(2, 4, 2);
+                rideGroup.add(hauntedTower);
+                
+                // Glowing windows
+                for (let i = 0; i < 4; i++) {
+                    const hauntedWindowGeometry = new THREE.PlaneGeometry(0.8, 1);
+                    const hauntedWindowMaterial = new THREE.MeshBasicMaterial({ 
+                        color: 0xffff00, 
+                        transparent: true, 
+                        opacity: 0.7 
+                    });
+                    const hauntedWindow = new THREE.Mesh(hauntedWindowGeometry, hauntedWindowMaterial);
+                    const angle = (i / 4) * Math.PI * 2;
+                    hauntedWindow.position.set(Math.cos(angle) * 3, 3, Math.sin(angle) * 3);
+                    hauntedWindow.lookAt(0, 3, 0);
+                    rideGroup.add(hauntedWindow);
+                }
+                
+                // Spooky entrance door
+                const hauntedDoorGeometry = new THREE.BoxGeometry(1, 2.5, 0.2);
+                const hauntedDoorMaterial = new THREE.MeshPhongMaterial({ color: 0x4a2c17 });
+                const hauntedDoor = new THREE.Mesh(hauntedDoorGeometry, hauntedDoorMaterial);
+                hauntedDoor.position.set(0, 1.25, 3.1);
+                rideGroup.add(hauntedDoor);
+                break;
         }
         
         rideGroup.position.set(rideData.x, 0, rideData.z);
@@ -1899,13 +1952,22 @@ class MinaAdventureGame {
             this.createMummyInterior(mummyRide);
         }
         
+        // Find the Haunted Mansion and create interior
+        const hauntedRide = this.rides.find(ride => ride.userData.name === 'Haunted Hollywood Mansion');
+        if (hauntedRide) {
+            this.createHauntedInterior(hauntedRide);
+        }
+        
         // Add entrance markers to buildings
         this.addBuildingEntrances();
     }
     
     createMummyInterior(parentRide) {
         const interior = new THREE.Group();
-        interior.name = 'mummyInterior';
+        interior.name = 'mummyDarkRide';
+        
+        // Initialize dark ride system
+        this.initializeDarkRideSystem(interior, parentRide);
         
         // Create tomb chamber - larger interior space
         const chamberGeometry = new THREE.BoxGeometry(25, 12, 25);
@@ -2009,7 +2071,798 @@ class MinaAdventureGame {
         this.buildings.push(interior);
         this.scene.add(interior);
         
-        console.log('🏺 Created Mummy tomb interior');
+        console.log('🏺 Created Mummy Dark Ride Experience');
+    }
+    
+    initializeDarkRideSystem(interior, parentRide) {
+        // Create the complete dark ride experience
+        const rideSystem = {
+            showBuilding: null,
+            queueLine: [],
+            preShowRoom: null,
+            rideVehicles: [],
+            trackPath: [],
+            currentScene: 0,
+            rideActive: false,
+            boardingStation: null,
+            unloadStation: null
+        };
+        
+        // Store ride system in interior userData
+        interior.userData.rideSystem = rideSystem;
+        
+        // Build show building exterior
+        this.buildShowBuilding(interior, rideSystem, parentRide.position);
+        
+        // Create queue line with switchbacks
+        this.buildQueueLine(interior, rideSystem, parentRide.position);
+        
+        // Create pre-show chamber
+        this.buildPreShowRoom(interior, rideSystem, parentRide.position);
+        
+        // Build ride track system
+        this.buildRideTrack(interior, rideSystem, parentRide.position);
+        
+        // Create ride vehicles
+        this.buildRideVehicles(interior, rideSystem, parentRide.position);
+        
+        // Build all ride scenes
+        this.buildAllRideScenes(interior, rideSystem, parentRide.position);
+    }
+    
+    buildShowBuilding(interior, rideSystem, basePos) {
+        // Create massive show building (80x40x60)
+        const buildingGroup = new THREE.Group();
+        
+        // Main structure
+        const buildingGeometry = new THREE.BoxGeometry(80, 40, 60);
+        const buildingMaterial = new THREE.MeshPhongMaterial({
+            color: 0x2a2416,
+            side: THREE.BackSide
+        });
+        const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+        building.position.y = 20;
+        buildingGroup.add(building);
+        
+        // Grand entrance portal
+        const portalGeometry = new THREE.BoxGeometry(8, 12, 2);
+        const portalMaterial = new THREE.MeshPhongMaterial({
+            color: 0xcd853f
+        });
+        const portal = new THREE.Mesh(portalGeometry, portalMaterial);
+        portal.position.set(0, 6, 30);
+        buildingGroup.add(portal);
+        
+        // Hieroglyphic decorations on entrance
+        for (let i = 0; i < 5; i++) {
+            const hieroGeometry = new THREE.BoxGeometry(1, 0.8, 0.1);
+            const hieroMaterial = new THREE.MeshPhongMaterial({
+                color: 0x4a4a4a,
+                emissive: 0x222222
+            });
+            const hiero = new THREE.Mesh(hieroGeometry, hieroMaterial);
+            hiero.position.set(-3 + i * 1.5, 8, 30.5);
+            buildingGroup.add(hiero);
+        }
+        
+        interior.add(buildingGroup);
+        rideSystem.showBuilding = buildingGroup;
+    }
+    
+    buildQueueLine(interior, rideSystem, basePos) {
+        const queueGroup = new THREE.Group();
+        
+        // Create winding queue with railings
+        const queuePoints = [
+            { x: 0, z: 25 },
+            { x: 10, z: 25 },
+            { x: 10, z: 20 },
+            { x: -10, z: 20 },
+            { x: -10, z: 15 },
+            { x: 5, z: 15 },
+            { x: 5, z: 10 }
+        ];
+        
+        // Build queue railings
+        for (let i = 0; i < queuePoints.length - 1; i++) {
+            const start = queuePoints[i];
+            const end = queuePoints[i + 1];
+            const distance = Math.sqrt(
+                Math.pow(end.x - start.x, 2) + 
+                Math.pow(end.z - start.z, 2)
+            );
+            
+            const railGeometry = new THREE.BoxGeometry(distance, 1, 0.1);
+            const railMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+            const rail = new THREE.Mesh(railGeometry, railMaterial);
+            
+            rail.position.set(
+                (start.x + end.x) / 2,
+                0.5,
+                (start.z + end.z) / 2
+            );
+            
+            const angle = Math.atan2(end.z - start.z, end.x - start.x);
+            rail.rotation.y = angle;
+            
+            queueGroup.add(rail);
+        }
+        
+        // Add themed props along queue
+        const props = [
+            { type: 'sarcophagus', x: 12, z: 22 },
+            { type: 'artifact', x: -8, z: 17 },
+            { type: 'excavation', x: 3, z: 12 }
+        ];
+        
+        props.forEach(prop => {
+            if (prop.type === 'sarcophagus') {
+                const sarcGeometry = new THREE.BoxGeometry(2, 3, 1);
+                const sarcMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+                const sarc = new THREE.Mesh(sarcGeometry, sarcMaterial);
+                sarc.position.set(prop.x, 1.5, prop.z);
+                sarc.rotation.y = Math.random() * Math.PI;
+                queueGroup.add(sarc);
+            }
+        });
+        
+        interior.add(queueGroup);
+        rideSystem.queueLine = queueGroup;
+    }
+    
+    buildPreShowRoom(interior, rideSystem, basePos) {
+        const preShowGroup = new THREE.Group();
+        
+        // Circular chamber
+        const chamberGeometry = new THREE.CylinderGeometry(5, 5, 4, 16);
+        const chamberMaterial = new THREE.MeshPhongMaterial({
+            color: 0x3a3226,
+            side: THREE.BackSide
+        });
+        const chamber = new THREE.Mesh(chamberGeometry, chamberMaterial);
+        chamber.position.set(0, 2, 5);
+        preShowGroup.add(chamber);
+        
+        // Central artifact pedestal
+        const pedestalGeometry = new THREE.CylinderGeometry(1, 1.2, 1);
+        const pedestalMaterial = new THREE.MeshPhongMaterial({ color: 0x8b7355 });
+        const pedestal = new THREE.Mesh(pedestalGeometry, pedestalMaterial);
+        pedestal.position.set(0, 0.5, 5);
+        preShowGroup.add(pedestal);
+        
+        // Mystical artifact on pedestal
+        const artifactGeometry = new THREE.OctahedronGeometry(0.5);
+        const artifactMaterial = new THREE.MeshPhongMaterial({
+            color: 0xffd700,
+            emissive: 0xffaa00,
+            emissiveIntensity: 0.3
+        });
+        const artifact = new THREE.Mesh(artifactGeometry, artifactMaterial);
+        artifact.position.set(0, 1.5, 5);
+        artifact.userData.animationType = 'rotate';
+        preShowGroup.add(artifact);
+        
+        interior.add(preShowGroup);
+        rideSystem.preShowRoom = preShowGroup;
+    }
+    
+    buildRideTrack(interior, rideSystem, basePos) {
+        // Create spline path for ride track (400m total)
+        const trackPoints = [
+            // Station
+            new THREE.Vector3(0, 1, 0),
+            // Scene 1 - Tomb Entry
+            new THREE.Vector3(0, 1, -10),
+            new THREE.Vector3(0, 0, -20),
+            new THREE.Vector3(5, -1, -25),
+            // Scene 2 - Treasure Chamber  
+            new THREE.Vector3(15, -1, -25),
+            new THREE.Vector3(20, -1, -20),
+            new THREE.Vector3(20, -1, -10),
+            // Scene 3 - Mummy Awakening
+            new THREE.Vector3(15, -1, 0),
+            new THREE.Vector3(10, -1, 5),
+            // Scene 4 - Curse Chamber
+            new THREE.Vector3(0, -1, 10),
+            new THREE.Vector3(-10, 0, 10),
+            // Scene 5 - Escape
+            new THREE.Vector3(-15, 1, 5),
+            new THREE.Vector3(-15, 2, -5),
+            // Scene 6 - Finale
+            new THREE.Vector3(-10, 2, -10),
+            new THREE.Vector3(-5, 1, -5),
+            new THREE.Vector3(0, 1, 0) // Return to station
+        ];
+        
+        // Create visible track
+        const trackGeometry = new THREE.BufferGeometry().setFromPoints(trackPoints);
+        const trackMaterial = new THREE.LineBasicMaterial({ 
+            color: 0x444444,
+            linewidth: 2 
+        });
+        const trackLine = new THREE.Line(trackGeometry, trackMaterial);
+        trackLine.visible = false; // Hide in production
+        interior.add(trackLine);
+        
+        // Store track data
+        rideSystem.trackPath = trackPoints;
+        rideSystem.trackSpline = new THREE.CatmullRomCurve3(trackPoints);
+    }
+    
+    buildRideVehicles(interior, rideSystem, basePos) {
+        // Create Explorer Cart vehicles
+        for (let i = 0; i < 3; i++) {
+            const vehicleGroup = new THREE.Group();
+            
+            // Cart base
+            const baseGeometry = new THREE.BoxGeometry(2, 0.8, 1.5);
+            const baseMaterial = new THREE.MeshPhongMaterial({ color: 0x4a4a4a });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            vehicleGroup.add(base);
+            
+            // Seats (2 rows of 2)
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 2; col++) {
+                    const seatGeometry = new THREE.BoxGeometry(0.4, 0.6, 0.4);
+                    const seatMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+                    const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                    seat.position.set(
+                        -0.3 + col * 0.6,
+                        0.7,
+                        -0.3 + row * 0.6
+                    );
+                    vehicleGroup.add(seat);
+                }
+            }
+            
+            // Headlights
+            const headlightGeometry = new THREE.SphereGeometry(0.1);
+            const headlightMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00,
+                emissive: 0xffff00 
+            });
+            const leftLight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            leftLight.position.set(-0.7, 0.3, 0.8);
+            vehicleGroup.add(leftLight);
+            
+            const rightLight = leftLight.clone();
+            rightLight.position.x = 0.7;
+            vehicleGroup.add(rightLight);
+            
+            // Add spotlight from headlights
+            const spotlight = new THREE.SpotLight(0xffffff, 1, 10, Math.PI / 6);
+            spotlight.position.set(0, 0.5, 0.8);
+            spotlight.target.position.set(0, 0, 2);
+            vehicleGroup.add(spotlight);
+            vehicleGroup.add(spotlight.target);
+            
+            // Vehicle data
+            vehicleGroup.userData = {
+                id: i,
+                occupied: false,
+                currentProgress: 0,
+                speed: 0.02,
+                riders: []
+            };
+            
+            // Position at station initially
+            vehicleGroup.position.set(0, 1, i * 3);
+            
+            interior.add(vehicleGroup);
+            rideSystem.rideVehicles.push(vehicleGroup);
+        }
+    }
+    
+    buildAllRideScenes(interior, rideSystem, basePos) {
+        // Scene 1: Tomb Entry
+        this.buildScene1TombEntry(interior, rideSystem);
+        
+        // Scene 2: Treasure Chamber
+        this.buildScene2TreasureChamber(interior, rideSystem);
+        
+        // Scene 3: Mummy Awakening
+        this.buildScene3MummyAwakening(interior, rideSystem);
+        
+        // Scene 4: Curse Chamber
+        this.buildScene4CurseChamber(interior, rideSystem);
+        
+        // Scene 5: Escape Sequence
+        this.buildScene5Escape(interior, rideSystem);
+        
+        // Scene 6: Finale
+        this.buildScene6Finale(interior, rideSystem);
+    }
+    
+    buildScene1TombEntry(interior, rideSystem) {
+        const sceneGroup = new THREE.Group();
+        sceneGroup.position.set(0, 0, -20);
+        
+        // Closing walls effect
+        const wallLeft = new THREE.BoxGeometry(10, 8, 1);
+        const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x8b7355 });
+        const leftWall = new THREE.Mesh(wallLeft, wallMaterial);
+        leftWall.position.set(-5, 4, 0);
+        leftWall.userData.animationType = 'slideIn';
+        sceneGroup.add(leftWall);
+        
+        const rightWall = leftWall.clone();
+        rightWall.position.x = 5;
+        sceneGroup.add(rightWall);
+        
+        // Stone door
+        const doorGeometry = new THREE.BoxGeometry(6, 8, 0.5);
+        const doorMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 });
+        const door = new THREE.Mesh(doorGeometry, doorMaterial);
+        door.position.set(0, 4, -5);
+        door.userData.animationType = 'doorOpen';
+        sceneGroup.add(door);
+        
+        interior.add(sceneGroup);
+    }
+    
+    buildScene2TreasureChamber(interior, rideSystem) {
+        const sceneGroup = new THREE.Group();
+        sceneGroup.position.set(20, -1, -20);
+        
+        // Gold piles
+        for (let i = 0; i < 10; i++) {
+            const goldGeometry = new THREE.SphereGeometry(0.3 + Math.random() * 0.3);
+            const goldMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xffd700,
+                shininess: 100 
+            });
+            const gold = new THREE.Mesh(goldGeometry, goldMaterial);
+            gold.position.set(
+                (Math.random() - 0.5) * 10,
+                Math.random() * 2,
+                (Math.random() - 0.5) * 10
+            );
+            sceneGroup.add(gold);
+        }
+        
+        // Guardian statues
+        for (let i = 0; i < 2; i++) {
+            const statueGeometry = new THREE.BoxGeometry(1, 4, 1);
+            const statueMaterial = new THREE.MeshPhongMaterial({ color: 0x8b7355 });
+            const statue = new THREE.Mesh(statueGeometry, statueMaterial);
+            statue.position.set(i === 0 ? -4 : 4, 2, 0);
+            statue.userData.animationType = 'headTurn';
+            sceneGroup.add(statue);
+        }
+        
+        interior.add(sceneGroup);
+    }
+    
+    buildScene3MummyAwakening(interior, rideSystem) {
+        const sceneGroup = new THREE.Group();
+        sceneGroup.position.set(10, -1, 5);
+        
+        // Sarcophagus
+        const sarcGeometry = new THREE.BoxGeometry(3, 1.5, 7);
+        const sarcMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+        const sarcophagus = new THREE.Mesh(sarcGeometry, sarcMaterial);
+        sarcophagus.position.y = 0.75;
+        sceneGroup.add(sarcophagus);
+        
+        // Mummy figure
+        const mummyGroup = new THREE.Group();
+        const mummyBody = new THREE.BoxGeometry(1, 2.5, 0.5);
+        const mummyMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x8b7355,
+            opacity: 0.9,
+            transparent: true
+        });
+        const mummy = new THREE.Mesh(mummyBody, mummyMaterial);
+        mummy.position.y = 1.25;
+        mummyGroup.add(mummy);
+        
+        // Mummy head
+        const headGeometry = new THREE.SphereGeometry(0.4);
+        const head = new THREE.Mesh(headGeometry, mummyMaterial);
+        head.position.y = 2.8;
+        mummyGroup.add(head);
+        
+        mummyGroup.position.y = -2; // Hidden initially
+        mummyGroup.userData.animationType = 'mummyRise';
+        sceneGroup.add(mummyGroup);
+        
+        interior.add(sceneGroup);
+    }
+    
+    buildScene4CurseChamber(interior, rideSystem) {
+        const sceneGroup = new THREE.Group();
+        sceneGroup.position.set(0, -1, 10);
+        
+        // Rotating room walls with hieroglyphs
+        const cylinderGeometry = new THREE.CylinderGeometry(8, 8, 6, 16, 1, true);
+        const cylinderMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x4a3c28,
+            side: THREE.DoubleSide
+        });
+        const rotatingWalls = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+        rotatingWalls.userData.animationType = 'rotate';
+        sceneGroup.add(rotatingWalls);
+        
+        // Scarab beetles
+        for (let i = 0; i < 20; i++) {
+            const scarabGeometry = new THREE.SphereGeometry(0.2, 6, 4);
+            const scarabMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x000000,
+                shininess: 100 
+            });
+            const scarab = new THREE.Mesh(scarabGeometry, scarabMaterial);
+            const angle = (i / 20) * Math.PI * 2;
+            scarab.position.set(
+                Math.cos(angle) * 7,
+                Math.random() * 4 - 2,
+                Math.sin(angle) * 7
+            );
+            scarab.userData.animationType = 'crawl';
+            sceneGroup.add(scarab);
+        }
+        
+        interior.add(sceneGroup);
+    }
+    
+    buildScene5Escape(interior, rideSystem) {
+        const sceneGroup = new THREE.Group();
+        sceneGroup.position.set(-15, 1, 0);
+        
+        // Falling debris particles
+        const debrisGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+        const debrisMaterial = new THREE.MeshPhongMaterial({ color: 0x8b7355 });
+        
+        for (let i = 0; i < 15; i++) {
+            const debris = new THREE.Mesh(debrisGeometry, debrisMaterial);
+            debris.position.set(
+                (Math.random() - 0.5) * 10,
+                5 + Math.random() * 3,
+                (Math.random() - 0.5) * 10
+            );
+            debris.userData.animationType = 'fall';
+            debris.userData.fallSpeed = 0.5 + Math.random() * 0.5;
+            sceneGroup.add(debris);
+        }
+        
+        // Fire effects on walls
+        for (let i = 0; i < 6; i++) {
+            const fireLight = new THREE.PointLight(0xff4500, 1, 5);
+            const angle = (i / 6) * Math.PI * 2;
+            fireLight.position.set(
+                Math.cos(angle) * 6,
+                1,
+                Math.sin(angle) * 6
+            );
+            sceneGroup.add(fireLight);
+        }
+        
+        interior.add(sceneGroup);
+    }
+    
+    buildScene6Finale(interior, rideSystem) {
+        const sceneGroup = new THREE.Group();
+        sceneGroup.position.set(-5, 1, -5);
+        
+        // Calm treasury room
+        const treasuryGeometry = new THREE.BoxGeometry(15, 8, 15);
+        const treasuryMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xdaa520,
+            side: THREE.BackSide
+        });
+        const treasury = new THREE.Mesh(treasuryGeometry, treasuryMaterial);
+        treasury.position.y = 4;
+        sceneGroup.add(treasury);
+        
+        // Final mummy behind glass
+        const glassGeometry = new THREE.BoxGeometry(4, 4, 0.2);
+        const glassMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x87ceeb,
+            transparent: true,
+            opacity: 0.3
+        });
+        const glass = new THREE.Mesh(glassGeometry, glassMaterial);
+        glass.position.set(0, 2, -6);
+        sceneGroup.add(glass);
+        
+        interior.add(sceneGroup);
+    }
+    
+    updateMummyDarkRide(deltaTime, time) {
+        // Find the Mummy dark ride
+        const mummyInterior = this.buildings.find(b => b.name === 'mummyDarkRide');
+        if (!mummyInterior || !mummyInterior.userData.rideSystem) return;
+        
+        const rideSystem = mummyInterior.userData.rideSystem;
+        
+        // Update each vehicle on the track
+        rideSystem.rideVehicles.forEach((vehicle, index) => {
+            const userData = vehicle.userData;
+            
+            // Check for boarding at station
+            if (!userData.occupied && this.mina) {
+                const distance = vehicle.position.distanceTo(this.mina.position);
+                if (distance < 3 && userData.currentProgress < 0.01) {
+                    // Show boarding prompt
+                    if (!this.boardingPromptShown) {
+                        console.log('🎢 Press E to board the Mummy Dark Ride!');
+                        this.boardingPromptShown = true;
+                    }
+                    
+                    // Check for boarding input
+                    if (this.controls.forward || this.controls.run) {
+                        this.boardMummyRide(vehicle, rideSystem);
+                    }
+                }
+            }
+            
+            // Update vehicle movement along track
+            if (userData.occupied || userData.currentProgress > 0) {
+                userData.currentProgress += userData.speed * deltaTime;
+                
+                // Loop back to start
+                if (userData.currentProgress >= 1) {
+                    userData.currentProgress = 0;
+                    userData.occupied = false;
+                    
+                    // Unload riders
+                    if (userData.riders.includes(this.mina)) {
+                        this.unboardMummyRide(vehicle, rideSystem);
+                    }
+                }
+                
+                // Get position along spline
+                if (rideSystem.trackSpline) {
+                    const point = rideSystem.trackSpline.getPoint(userData.currentProgress);
+                    vehicle.position.copy(point);
+                    
+                    // Look ahead on track
+                    const lookAhead = Math.min(userData.currentProgress + 0.01, 1);
+                    const lookPoint = rideSystem.trackSpline.getPoint(lookAhead);
+                    vehicle.lookAt(lookPoint);
+                }
+                
+                // Trigger scene effects based on progress
+                this.triggerRideSceneEffects(userData.currentProgress, rideSystem, time);
+                
+                // Vehicle animations
+                vehicle.rotation.z = Math.sin(time * 4) * 0.02; // Gentle sway
+                
+                // Headlight flicker
+                const headlights = vehicle.children.filter(c => c.type === 'SpotLight');
+                headlights.forEach(light => {
+                    light.intensity = 0.8 + Math.random() * 0.2;
+                });
+            }
+        });
+        
+        // Animate scene elements
+        this.animateDarkRideScenes(mummyInterior, time);
+    }
+    
+    boardMummyRide(vehicle, rideSystem) {
+        console.log('🎢 Boarding Mummy Dark Ride!');
+        
+        vehicle.userData.occupied = true;
+        vehicle.userData.riders = [this.mina];
+        vehicle.userData.currentProgress = 0;
+        
+        // Lock player to vehicle
+        if (this.mina) {
+            this.mina.userData.ridingVehicle = vehicle;
+            this.mina.visible = false; // Hide character while riding
+        }
+        
+        // Play boarding sound/animation
+        this.playCharacterAnimation(this.mina, 'jumping', 1000);
+        
+        // Start dramatic music
+        console.log('🎵 Starting ride music...');
+        
+        this.boardingPromptShown = false;
+    }
+    
+    unboardMummyRide(vehicle, rideSystem) {
+        console.log('🎢 Ride complete! Thanks for riding!');
+        
+        vehicle.userData.occupied = false;
+        vehicle.userData.riders = [];
+        
+        // Unlock player from vehicle
+        if (this.mina) {
+            this.mina.userData.ridingVehicle = null;
+            this.mina.visible = true;
+            this.mina.position.copy(vehicle.position);
+            this.mina.position.y = 1.35;
+        }
+        
+        // Celebration animation
+        this.playCharacterAnimation(this.mina, 'dancing', 2000);
+        this.playCharacterAnimation(this.sacha, 'waving', 1500);
+    }
+    
+    triggerRideSceneEffects(progress, rideSystem, time) {
+        // Scene triggers based on track progress
+        
+        // Scene 1: Tomb Entry (5-15%)
+        if (progress > 0.05 && progress < 0.15) {
+            // Walls closing in effect
+            // Door opening animation
+        }
+        
+        // Scene 2: Treasure Chamber (20-30%)
+        if (progress > 0.20 && progress < 0.30) {
+            // Guardian statues turn heads
+            // Gold sparkle effects
+        }
+        
+        // Scene 3: Mummy Awakening (35-45%)
+        if (progress > 0.35 && progress < 0.45) {
+            // Mummy rises from sarcophagus
+            // Strobe lighting
+            if (Math.random() < 0.1) {
+                console.log('⚡ MUMMY AWAKENS!');
+            }
+        }
+        
+        // Scene 4: Curse Chamber (50-60%)
+        if (progress > 0.50 && progress < 0.60) {
+            // Rotating walls
+            // Scarab swarm
+        }
+        
+        // Scene 5: Escape (65-75%)  
+        if (progress > 0.65 && progress < 0.75) {
+            // Falling debris
+            // Fire effects
+        }
+        
+        // Scene 6: Finale (80-95%)
+        if (progress > 0.80 && progress < 0.95) {
+            // Calm lighting
+            // Final mummy scare
+        }
+    }
+    
+    animateDarkRideScenes(interior, time) {
+        interior.traverse(object => {
+            if (object.userData.animationType) {
+                switch(object.userData.animationType) {
+                    case 'rotate':
+                        object.rotation.y += 0.01;
+                        break;
+                    case 'mummyRise':
+                        if (object.position.y < 1.25) {
+                            object.position.y += 0.01;
+                        }
+                        break;
+                    case 'doorOpen':
+                        if (object.position.y < 10) {
+                            object.position.y += 0.05;
+                        }
+                        break;
+                    case 'headTurn':
+                        object.rotation.y = Math.sin(time) * 0.5;
+                        break;
+                    case 'fall':
+                        object.position.y -= object.userData.fallSpeed * 0.01;
+                        if (object.position.y < -2) {
+                            object.position.y = 5 + Math.random() * 3;
+                        }
+                        break;
+                    case 'crawl':
+                        const angle = time * 2;
+                        object.position.x += Math.sin(angle) * 0.01;
+                        object.position.z += Math.cos(angle) * 0.01;
+                        break;
+                }
+            }
+        });
+    }
+    
+    createHauntedInterior(parentRide) {
+        const interior = new THREE.Group();
+        interior.name = 'hauntedInterior';
+        
+        // Create spooky mansion interior - Victorian parlor
+        const roomGeometry = new THREE.BoxGeometry(20, 10, 20);
+        const roomMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x2d1810,
+            side: THREE.BackSide // Show inside faces
+        });
+        const room = new THREE.Mesh(roomGeometry, roomMaterial);
+        room.position.set(parentRide.position.x, 5, parentRide.position.z);
+        interior.add(room);
+        
+        // Add spooky floating candles
+        for (let i = 0; i < 6; i++) {
+            const candleGeometry = new THREE.CylinderGeometry(0.1, 0.15, 0.8);
+            const candleMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+            const candle = new THREE.Mesh(candleGeometry, candleMaterial);
+            
+            const angle = (i / 6) * Math.PI * 2;
+            candle.position.set(
+                parentRide.position.x + Math.cos(angle) * 6,
+                8 + Math.sin(Date.now() * 0.001 + i) * 0.5, // Floating animation
+                parentRide.position.z + Math.sin(angle) * 6
+            );
+            
+            // Flickering flame effect
+            const flameGeometry = new THREE.SphereGeometry(0.2, 6, 6);
+            const flameMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff6600,
+                transparent: true,
+                opacity: 0.8
+            });
+            const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+            flame.position.y = 0.6;
+            candle.add(flame);
+            
+            interior.add(candle);
+        }
+        
+        // Add ghostly figures
+        for (let i = 0; i < 3; i++) {
+            const ghostGeometry = new THREE.SphereGeometry(0.8, 8, 8);
+            const ghostMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.3
+            });
+            const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
+            ghost.position.set(
+                parentRide.position.x + (Math.random() - 0.5) * 12,
+                3 + Math.random() * 3,
+                parentRide.position.z + (Math.random() - 0.5) * 12
+            );
+            
+            ghost.userData.floatOffset = Math.random() * Math.PI * 2;
+            interior.add(ghost);
+        }
+        
+        // Add treasure chest in the corner
+        const chestGeometry = new THREE.BoxGeometry(2, 1, 1);
+        const chestMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+        const chest = new THREE.Mesh(chestGeometry, chestMaterial);
+        chest.position.set(
+            parentRide.position.x + 7,
+            1,
+            parentRide.position.z + 7
+        );
+        
+        // Golden glow around the chest
+        const glowGeometry = new THREE.SphereGeometry(1.5, 8, 8);
+        const glowMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffd700,
+            transparent: true,
+            opacity: 0.2
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        chest.add(glow);
+        
+        interior.add(chest);
+        
+        interior.position.set(0, -50, 0); // Hidden below ground initially
+        interior.userData = {
+            type: 'interior',
+            parentBuilding: parentRide,
+            entryPosition: {
+                x: parentRide.position.x,
+                y: 1.35,
+                z: parentRide.position.z + 5
+            },
+            exitPosition: {
+                x: parentRide.position.x,
+                y: 1.35,
+                z: parentRide.position.z - 5
+            },
+            entranceRange: 5,
+            name: 'Haunted Mansion Interior'
+        };
+        
+        this.buildings.push(interior);
+        this.scene.add(interior);
+        
+        console.log('👻 Created Haunted Mansion interior');
     }
     
     addBuildingEntrances() {
@@ -2023,7 +2876,7 @@ class MinaAdventureGame {
         });
         
         this.rides.forEach(ride => {
-            if (ride.userData.rideType === 'indoor') {
+            if (ride.userData.rideType === 'indoor' || ride.userData.rideType === 'haunted') {
                 const entrance = new THREE.Mesh(entranceGeometry, entranceMaterial);
                 entrance.position.copy(ride.position);
                 entrance.position.y = 0.1;
@@ -2455,6 +3308,8 @@ class MinaAdventureGame {
         animations.jumping.time += deltaTime * animations.jumping.speed;
         animations.scared.time += deltaTime * animations.scared.speed;
         animations.laughing.time += deltaTime * animations.laughing.speed;
+        animations.waving.time += deltaTime * animations.waving.speed;
+        animations.dancing.time += deltaTime * animations.dancing.speed;
         
         // Apply current animation
         switch (animations.currentState) {
@@ -2469,6 +3324,12 @@ class MinaAdventureGame {
                 break;
             case 'walking':
                 this.animateWalking(character, bodyParts, animations.walking.time);
+                break;
+            case 'waving':
+                this.animateWaving(character, bodyParts, animations.waving.time);
+                break;
+            case 'dancing':
+                this.animateDancing(character, bodyParts, animations.dancing.time);
                 break;
             default: // idle
                 this.animateIdle(character, bodyParts, animations.idle.time);
@@ -2572,6 +3433,76 @@ class MinaAdventureGame {
         }
     }
     
+    animateWaving(character, bodyParts, time) {
+        if (!bodyParts) return;
+        
+        // Friendly waving motion with right arm
+        if (bodyParts.rightUpperArm) {
+            bodyParts.rightUpperArm.rotation.z = -0.5 + Math.sin(time * 8) * 0.4;
+            bodyParts.rightUpperArm.rotation.x = Math.sin(time * 6) * 0.2;
+        }
+        
+        // Corresponding forearm movement
+        if (bodyParts.rightForearm) {
+            bodyParts.rightForearm.rotation.z = -0.3 + Math.sin(time * 8) * 0.3;
+        }
+        
+        // Hand motion
+        if (bodyParts.rightHand) {
+            bodyParts.rightHand.rotation.z = Math.sin(time * 10) * 0.2;
+        }
+        
+        // Slight head turn toward waving
+        if (bodyParts.head) {
+            bodyParts.head.rotation.y = Math.sin(time * 4) * 0.1;
+            bodyParts.head.position.y = 0.75 + Math.sin(time * 3) * 0.02;
+        }
+        
+        // Body sway
+        if (bodyParts.body) {
+            bodyParts.body.rotation.z = Math.sin(time * 4) * 0.05;
+        }
+    }
+    
+    animateDancing(character, bodyParts, time) {
+        if (!bodyParts) return;
+        
+        // Bouncy up and down movement
+        const bounceHeight = Math.sin(time * 6) * 0.3;
+        character.position.y = character.userData.animations.originalY + Math.abs(bounceHeight);
+        
+        // Both arms moving rhythmically
+        if (bodyParts.leftUpperArm) {
+            bodyParts.leftUpperArm.rotation.z = 0.3 + Math.sin(time * 5) * 0.4;
+            bodyParts.leftUpperArm.rotation.x = Math.sin(time * 4 + Math.PI) * 0.3;
+        }
+        if (bodyParts.rightUpperArm) {
+            bodyParts.rightUpperArm.rotation.z = -0.3 - Math.sin(time * 5) * 0.4;
+            bodyParts.rightUpperArm.rotation.x = Math.sin(time * 4) * 0.3;
+        }
+        
+        // Forearms following the beat
+        if (bodyParts.leftForearm) {
+            bodyParts.leftForearm.rotation.z = 0.2 + Math.sin(time * 6) * 0.2;
+        }
+        if (bodyParts.rightForearm) {
+            bodyParts.rightForearm.rotation.z = -0.2 - Math.sin(time * 6) * 0.2;
+        }
+        
+        // Head bobbing to the rhythm
+        if (bodyParts.head) {
+            bodyParts.head.position.y = 0.75 + Math.sin(time * 6) * 0.08;
+            bodyParts.head.rotation.z = Math.sin(time * 4) * 0.15;
+            bodyParts.head.rotation.y = Math.sin(time * 3) * 0.2;
+        }
+        
+        // Body twist and sway
+        if (bodyParts.body) {
+            bodyParts.body.rotation.y = Math.sin(time * 4) * 0.2;
+            bodyParts.body.rotation.z = Math.sin(time * 5) * 0.1;
+        }
+    }
+    
     checkMonsterReactions() {
         if (!this.mina) return;
         
@@ -2592,12 +3523,31 @@ class MinaAdventureGame {
             }
         });
         
-        // Random laughing when no monsters nearby
+        // Random animations when no monsters nearby
         if (this.gameState.monstersNearby === 0 && Math.random() < 0.001) { // 0.1% chance per frame
+            const animations = ['laughing', 'waving', 'dancing'];
+            const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
+            
             if (Math.random() > 0.5) {
-                this.playCharacterAnimation(this.mina, 'laughing', 2000);
+                this.playCharacterAnimation(this.mina, randomAnimation, 2500);
+                // Sacha might join in with dancing or waving
+                if (randomAnimation === 'dancing' && Math.random() > 0.6) {
+                    setTimeout(() => {
+                        this.playCharacterAnimation(this.sacha, 'dancing', 2000);
+                    }, 500);
+                } else if (randomAnimation === 'waving' && Math.random() > 0.7) {
+                    setTimeout(() => {
+                        this.playCharacterAnimation(this.sacha, 'waving', 1500);
+                    }, 800);
+                }
             } else {
-                this.playCharacterAnimation(this.sacha, 'laughing', 2000);
+                this.playCharacterAnimation(this.sacha, randomAnimation, 2500);
+                // Mina might respond to Sacha's actions
+                if (randomAnimation === 'dancing' && Math.random() > 0.6) {
+                    setTimeout(() => {
+                        this.playCharacterAnimation(this.mina, 'dancing', 2000);
+                    }, 300);
+                }
             }
         }
         
@@ -2963,6 +3913,9 @@ class MinaAdventureGame {
         if (!this.mina) return;
         
         const time = this.clock.getElapsedTime();
+        
+        // Update Mummy Dark Ride vehicles
+        this.updateMummyDarkRide(deltaTime, time);
         
         this.rideVehicles.forEach(vehicle => {
             const userData = vehicle.userData;
@@ -3794,51 +4747,218 @@ class MinaAdventureGame {
     
     updateMonsters(deltaTime) {
         this.gameState.monstersNearby = 0;
+        const currentTime = this.clock.getElapsedTime();
         
-        this.monsters.forEach(monster => {
+        this.monsters.forEach((monster, index) => {
             const distanceToMina = monster.position.distanceTo(this.mina.position);
+            const distanceToSacha = monster.position.distanceTo(this.sacha.position);
+            const minDistance = Math.min(distanceToMina, distanceToSacha);
             
-            if (distanceToMina < monster.userData.detectionRadius) {
+            // Enhanced AI states: idle, patrolling, alerted, chasing, searching
+            if (!monster.userData.aiState) monster.userData.aiState = 'patrolling';
+            if (!monster.userData.lastSeenTarget) monster.userData.lastSeenTarget = null;
+            if (!monster.userData.searchTime) monster.userData.searchTime = 0;
+            if (!monster.userData.alertLevel) monster.userData.alertLevel = 0;
+            
+            // Determine target (closer of Mina or Sacha)
+            const target = distanceToMina < distanceToSacha ? this.mina : this.sacha;
+            const targetDistance = minDistance;
+            
+            // Update AI state based on distance and line of sight
+            if (targetDistance < monster.userData.detectionRadius) {
                 this.gameState.monstersNearby++;
-                monster.userData.chasing = true;
                 
-                // Chase Mina
-                const direction = new THREE.Vector3()
-                    .subVectors(this.mina.position, monster.position)
-                    .normalize();
+                // Check for obstacles (simple line of sight)
+                const hasLineOfSight = this.checkLineOfSight(monster.position, target.position);
                 
-                monster.position.add(direction.multiplyScalar(monster.userData.speed * deltaTime));
-                monster.lookAt(this.mina.position);
-                
-                // Check if monster caught Mina
-                if (distanceToMina < 2) {
-                    this.gameState.health -= 10 * deltaTime;
-                    if (this.gameState.health <= 0) {
-                        this.gameOver();
-                    }
+                if (hasLineOfSight && targetDistance < monster.userData.detectionRadius * 0.8) {
+                    monster.userData.aiState = 'chasing';
+                    monster.userData.lastSeenTarget = target.position.clone();
+                    monster.userData.alertLevel = Math.min(monster.userData.alertLevel + deltaTime, 3);
+                } else if (monster.userData.aiState !== 'chasing') {
+                    monster.userData.aiState = 'alerted';
+                    monster.userData.alertLevel = Math.min(monster.userData.alertLevel + deltaTime * 0.5, 2);
                 }
-            } else {
-                monster.userData.chasing = false;
-                // Random wandering when not chasing
-                if (Math.random() < 0.1) {
-                    monster.userData.targetPosition.set(
-                        monster.position.x + (Math.random() - 0.5) * 20,
-                        monster.position.y,
-                        monster.position.z + (Math.random() - 0.5) * 20
-                    );
-                }
-                
-                const direction = new THREE.Vector3()
-                    .subVectors(monster.userData.targetPosition, monster.position);
-                if (direction.length() > 1) {
-                    direction.normalize();
-                    monster.position.add(direction.multiplyScalar(monster.userData.speed * 0.3 * deltaTime));
+            } else if (monster.userData.aiState === 'chasing' && monster.userData.lastSeenTarget) {
+                // Lost sight, enter search mode
+                monster.userData.aiState = 'searching';
+                monster.userData.searchTime = 5; // Search for 5 seconds
+            }
+            
+            // Execute AI behavior based on state
+            switch (monster.userData.aiState) {
+                case 'chasing':
+                    this.monsterChase(monster, target, deltaTime);
+                    break;
+                case 'searching':
+                    this.monsterSearch(monster, deltaTime);
+                    break;
+                case 'alerted':
+                    this.monsterAlerted(monster, target, deltaTime);
+                    break;
+                case 'patrolling':
+                default:
+                    this.monsterPatrol(monster, deltaTime);
+                    break;
+            }
+            
+            // Group coordination - monsters communicate
+            if (monster.userData.aiState === 'chasing' || monster.userData.aiState === 'alerted') {
+                this.alertNearbyMonsters(monster, index, target.position);
+            }
+            
+            // Check if monster caught player
+            if (targetDistance < 2) {
+                this.gameState.health -= (10 + monster.userData.alertLevel * 5) * deltaTime;
+                if (this.gameState.health <= 0) {
+                    this.gameOver();
                 }
             }
             
-            // Simple monster animation
-            monster.rotation.y += Math.sin(this.clock.getElapsedTime() + monster.userData.id) * 0.01;
+            // Enhanced monster animations based on state
+            this.animateMonster(monster, currentTime, deltaTime);
+            
+            // Gradually reduce alert level when not actively chasing
+            if (monster.userData.aiState !== 'chasing' && monster.userData.aiState !== 'alerted') {
+                monster.userData.alertLevel = Math.max(monster.userData.alertLevel - deltaTime * 0.3, 0);
+            }
         });
+    }
+    
+    monsterChase(monster, target, deltaTime) {
+        // Aggressive chase with predictive movement
+        const futureTargetPos = target.position.clone();
+        if (target.userData && target.userData.velocity) {
+            futureTargetPos.add(target.userData.velocity.clone().multiplyScalar(0.3));
+        }
+        
+        const direction = new THREE.Vector3()
+            .subVectors(futureTargetPos, monster.position)
+            .normalize();
+        
+        const chaseSpeed = monster.userData.speed * (1 + monster.userData.alertLevel * 0.3);
+        monster.position.add(direction.multiplyScalar(chaseSpeed * deltaTime));
+        monster.lookAt(futureTargetPos);
+        
+        monster.userData.lastSeenTarget = target.position.clone();
+    }
+    
+    monsterSearch(monster, deltaTime) {
+        monster.userData.searchTime -= deltaTime;
+        
+        if (monster.userData.searchTime > 0 && monster.userData.lastSeenTarget) {
+            // Move towards last known position
+            const direction = new THREE.Vector3()
+                .subVectors(monster.userData.lastSeenTarget, monster.position);
+            
+            if (direction.length() > 2) {
+                direction.normalize();
+                monster.position.add(direction.multiplyScalar(monster.userData.speed * 0.7 * deltaTime));
+            } else {
+                // Reached last known position, search in circles
+                const searchRadius = 5;
+                const angle = this.clock.getElapsedTime() * 2 + monster.userData.id;
+                const searchTarget = monster.userData.lastSeenTarget.clone();
+                searchTarget.x += Math.cos(angle) * searchRadius;
+                searchTarget.z += Math.sin(angle) * searchRadius;
+                
+                const searchDirection = new THREE.Vector3()
+                    .subVectors(searchTarget, monster.position)
+                    .normalize();
+                monster.position.add(searchDirection.multiplyScalar(monster.userData.speed * 0.5 * deltaTime));
+            }
+        } else {
+            // Give up search, return to patrolling
+            monster.userData.aiState = 'patrolling';
+            monster.userData.lastSeenTarget = null;
+        }
+    }
+    
+    monsterAlerted(monster, target, deltaTime) {
+        // Move cautiously towards target area
+        const direction = new THREE.Vector3()
+            .subVectors(target.position, monster.position)
+            .normalize();
+        
+        monster.position.add(direction.multiplyScalar(monster.userData.speed * 0.6 * deltaTime));
+        monster.lookAt(target.position);
+    }
+    
+    monsterPatrol(monster, deltaTime) {
+        // Enhanced patrolling with waypoints
+        if (!monster.userData.patrolWaypoints) {
+            // Create patrol waypoints around spawn area
+            const spawnPos = monster.userData.spawnPosition || monster.position.clone();
+            monster.userData.patrolWaypoints = [];
+            for (let i = 0; i < 4; i++) {
+                const angle = (i / 4) * Math.PI * 2;
+                const waypoint = spawnPos.clone();
+                waypoint.x += Math.cos(angle) * 15;
+                waypoint.z += Math.sin(angle) * 15;
+                monster.userData.patrolWaypoints.push(waypoint);
+            }
+            monster.userData.currentWaypoint = 0;
+        }
+        
+        const currentWaypoint = monster.userData.patrolWaypoints[monster.userData.currentWaypoint];
+        const direction = new THREE.Vector3()
+            .subVectors(currentWaypoint, monster.position);
+        
+        if (direction.length() < 3) {
+            // Reached waypoint, move to next
+            monster.userData.currentWaypoint = (monster.userData.currentWaypoint + 1) % monster.userData.patrolWaypoints.length;
+        } else {
+            direction.normalize();
+            monster.position.add(direction.multiplyScalar(monster.userData.speed * 0.4 * deltaTime));
+        }
+    }
+    
+    alertNearbyMonsters(alertingMonster, alertingIndex, targetPosition) {
+        const alertRadius = 25;
+        
+        this.monsters.forEach((monster, index) => {
+            if (index !== alertingIndex) {
+                const distance = alertingMonster.position.distanceTo(monster.position);
+                if (distance < alertRadius && monster.userData.aiState === 'patrolling') {
+                    monster.userData.aiState = 'alerted';
+                    monster.userData.lastSeenTarget = targetPosition.clone();
+                    monster.userData.alertLevel = 1;
+                }
+            }
+        });
+    }
+    
+    checkLineOfSight(from, to) {
+        // Simple line of sight check (can be enhanced with raycasting)
+        const distance = from.distanceTo(to);
+        const maxRange = 30;
+        return distance < maxRange; // Simplified for now
+    }
+    
+    animateMonster(monster, currentTime, deltaTime) {
+        const baseAnimation = Math.sin(currentTime + monster.userData.id) * 0.01;
+        
+        switch (monster.userData.aiState) {
+            case 'chasing':
+                // Aggressive movement
+                monster.rotation.y += baseAnimation * 3;
+                monster.scale.setScalar(1 + Math.sin(currentTime * 8) * 0.05);
+                break;
+            case 'alerted':
+                // Tense, looking around
+                monster.rotation.y += baseAnimation * 2;
+                monster.position.y = monster.userData.originalY + Math.sin(currentTime * 4) * 0.1;
+                break;
+            case 'searching':
+                // Quick head movements
+                monster.rotation.y += Math.sin(currentTime * 6) * 0.1;
+                break;
+            default:
+                // Calm patrolling
+                monster.rotation.y += baseAnimation;
+                monster.position.y = monster.userData.originalY + Math.sin(currentTime * 2) * 0.02;
+                break;
+        }
     }
     
     checkTreasureCollection() {
@@ -3852,14 +4972,31 @@ class MinaAdventureGame {
                     
                     // Celebration animations!
                     this.playCharacterAnimation(this.mina, 'jumping', 2000);
-                    this.playCharacterAnimation(this.sacha, 'laughing', 1500);
+                    this.playCharacterAnimation(this.sacha, 'waving', 1500);
+                    
+                    // Add a dancing celebration after the initial reaction
+                    setTimeout(() => {
+                        this.playCharacterAnimation(this.mina, 'dancing', 2500);
+                        this.playCharacterAnimation(this.sacha, 'dancing', 2500);
+                    }, 2200);
                     
                     console.log(`Treasure collected! ${this.gameState.treasuresFound}/${this.gameState.totalTreasures}`);
                     
                     if (this.gameState.treasuresFound >= this.gameState.totalTreasures) {
-                        // Final celebration
-                        this.playCharacterAnimation(this.mina, 'laughing', 3000);
-                        this.playCharacterAnimation(this.sacha, 'jumping', 3000);
+                        // Epic final celebration sequence!
+                        this.playCharacterAnimation(this.mina, 'laughing', 2000);
+                        this.playCharacterAnimation(this.sacha, 'jumping', 2000);
+                        
+                        setTimeout(() => {
+                            this.playCharacterAnimation(this.mina, 'dancing', 4000);
+                            this.playCharacterAnimation(this.sacha, 'dancing', 4000);
+                        }, 2500);
+                        
+                        setTimeout(() => {
+                            this.playCharacterAnimation(this.mina, 'waving', 3000);
+                            this.playCharacterAnimation(this.sacha, 'waving', 3000);
+                        }, 7000);
+                        
                         this.gameWon();
                     }
                 }
