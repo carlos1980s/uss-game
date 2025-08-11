@@ -48,6 +48,9 @@ class MinaAdventureGame {
         this.rides = []; // Interactive theme park rides
         this.worldEvents = []; // Dynamic events happening in the world
         this.interactiveNPCs = []; // NPCs that can talk to the girls
+        this.buildings = []; // Interior building spaces
+        this.rideVehicles = []; // Vehicles that girls can ride
+        this.currentInterior = null; // Current interior space player is in
         
         // Controls
         this.controls = {
@@ -108,6 +111,8 @@ class MinaAdventureGame {
         this.createInteractiveNPCs();
         this.createCrowdSystem();
         this.createThemeRides();
+        this.createBuildingInteriors();
+        this.createRideVehicles();
         this.startWorldEvents();
         this.addParticleEffects();
         this.animate();
@@ -1885,6 +1890,282 @@ class MinaAdventureGame {
         return rideGroup;
     }
     
+    createBuildingInteriors() {
+        console.log('🏢 Creating building interiors...');
+        
+        // Find the Mummy pyramid and create interior
+        const mummyRide = this.rides.find(ride => ride.userData.name === 'Revenge of the Mummy');
+        if (mummyRide) {
+            this.createMummyInterior(mummyRide);
+        }
+        
+        // Add entrance markers to buildings
+        this.addBuildingEntrances();
+    }
+    
+    createMummyInterior(parentRide) {
+        const interior = new THREE.Group();
+        interior.name = 'mummyInterior';
+        
+        // Create tomb chamber - larger interior space
+        const chamberGeometry = new THREE.BoxGeometry(25, 12, 25);
+        const chamberMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x8b7355,
+            side: THREE.BackSide // Show inside faces
+        });
+        const chamber = new THREE.Mesh(chamberGeometry, chamberMaterial);
+        chamber.position.y = 6;
+        interior.add(chamber);
+        
+        // Hieroglyphic walls (textured pillars)
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const pillarGeometry = new THREE.BoxGeometry(2, 10, 1);
+            const pillarMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xcd853f,
+                shininess: 10
+            });
+            const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            pillar.position.set(
+                Math.cos(angle) * 10,
+                5,
+                Math.sin(angle) * 10
+            );
+            pillar.castShadow = true;
+            interior.add(pillar);
+            
+            // Add hieroglyphic decorations
+            const hieroGeometry = new THREE.BoxGeometry(1.8, 0.5, 0.1);
+            const hieroMaterial = new THREE.MeshPhongMaterial({ color: 0x4a4a4a });
+            for (let j = 0; j < 3; j++) {
+                const hiero = new THREE.Mesh(hieroGeometry, hieroMaterial);
+                hiero.position.set(
+                    Math.cos(angle) * 10.1,
+                    3 + j * 2,
+                    Math.sin(angle) * 10.1
+                );
+                hiero.rotation.y = angle;
+                interior.add(hiero);
+            }
+        }
+        
+        // Central sarcophagus
+        const sarcophagusGeometry = new THREE.BoxGeometry(3, 1, 8);
+        const sarcophagusMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+        const sarcophagus = new THREE.Mesh(sarcophagusGeometry, sarcophagusMaterial);
+        sarcophagus.position.set(0, 0.5, 0);
+        sarcophagus.castShadow = true;
+        interior.add(sarcophagus);
+        
+        // Treasure chests around the room
+        for (let i = 0; i < 4; i++) {
+            const angle = (i / 4) * Math.PI * 2 + Math.PI/4;
+            const chestGeometry = new THREE.BoxGeometry(1.5, 1, 1);
+            const chestMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+            const chest = new THREE.Mesh(chestGeometry, chestMaterial);
+            chest.position.set(
+                Math.cos(angle) * 6,
+                0.5,
+                Math.sin(angle) * 6
+            );
+            chest.userData.type = 'treasure';
+            chest.castShadow = true;
+            interior.add(chest);
+        }
+        
+        // Torches for atmospheric lighting
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const torchLight = new THREE.PointLight(0xff6600, 0.8, 15);
+            torchLight.position.set(
+                Math.cos(angle) * 8,
+                7,
+                Math.sin(angle) * 8
+            );
+            torchLight.castShadow = true;
+            interior.add(torchLight);
+            
+            // Visual torch
+            const torchGeometry = new THREE.CylinderGeometry(0.1, 0.2, 2);
+            const torchMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+            const torch = new THREE.Mesh(torchGeometry, torchMaterial);
+            torch.position.copy(torchLight.position);
+            torch.position.y -= 1;
+            interior.add(torch);
+        }
+        
+        // Position interior relative to the pyramid
+        interior.position.copy(parentRide.position);
+        interior.position.y = -50; // Underground
+        interior.visible = false; // Hidden by default
+        
+        interior.userData = {
+            type: 'interior',
+            parentBuilding: parentRide,
+            entranceRange: 5,
+            name: 'Mummy Tomb Interior'
+        };
+        
+        this.buildings.push(interior);
+        this.scene.add(interior);
+        
+        console.log('🏺 Created Mummy tomb interior');
+    }
+    
+    addBuildingEntrances() {
+        // Add entrance markers for buildings
+        const entranceGeometry = new THREE.RingGeometry(2, 2.5, 8);
+        const entranceMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x00ff00,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        
+        this.rides.forEach(ride => {
+            if (ride.userData.rideType === 'indoor') {
+                const entrance = new THREE.Mesh(entranceGeometry, entranceMaterial);
+                entrance.position.copy(ride.position);
+                entrance.position.y = 0.1;
+                entrance.rotation.x = -Math.PI / 2;
+                
+                // Animate the entrance ring
+                entrance.userData.animationOffset = Math.random() * Math.PI * 2;
+                entrance.userData.type = 'entrance';
+                entrance.userData.parentRide = ride;
+                
+                this.scene.add(entrance);
+            }
+        });
+    }
+    
+    createRideVehicles() {
+        console.log('🚗 Creating rideable vehicles...');
+        
+        // Create ride cars for different attractions
+        const vehicleTypes = [
+            { 
+                rideType: 'indoor', 
+                position: { x: -75, z: 5 }, 
+                type: 'mummyCart',
+                name: 'Mummy Adventure Cart'
+            },
+            { 
+                rideType: 'rollercoaster', 
+                position: { x: 75, z: -75 }, 
+                type: 'coasterCar',
+                name: 'Battlestar Fighter'
+            },
+            { 
+                rideType: 'water', 
+                position: { x: -75, z: -75 }, 
+                type: 'raftBoat',
+                name: 'Jurassic Raft'
+            }
+        ];
+        
+        vehicleTypes.forEach(vehicleData => {
+            const vehicle = this.createRideVehicle(vehicleData);
+            this.rideVehicles.push(vehicle);
+            this.scene.add(vehicle);
+        });
+    }
+    
+    createRideVehicle(vehicleData) {
+        const vehicleGroup = new THREE.Group();
+        
+        switch(vehicleData.type) {
+            case 'mummyCart':
+                // Ancient Egyptian-style cart
+                const cartBase = new THREE.BoxGeometry(4, 1, 6);
+                const cartMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+                const base = new THREE.Mesh(cartBase, cartMaterial);
+                base.position.y = 0.5;
+                base.castShadow = true;
+                vehicleGroup.add(base);
+                
+                // Seats for the girls
+                for (let i = 0; i < 2; i++) {
+                    const seatGeometry = new THREE.BoxGeometry(1.5, 0.8, 1.5);
+                    const seatMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 });
+                    const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                    seat.position.set(i * 2 - 0.5, 1.4, 0);
+                    seat.userData.seatId = i;
+                    vehicleGroup.add(seat);
+                }
+                
+                // Egyptian decorations
+                const decorGeometry = new THREE.CylinderGeometry(0.2, 0.2, 2);
+                const decorMaterial = new THREE.MeshPhongMaterial({ color: 0xdaa520 });
+                for (let i = 0; i < 4; i++) {
+                    const decor = new THREE.Mesh(decorGeometry, decorMaterial);
+                    decor.position.set(
+                        i % 2 === 0 ? -1.8 : 1.8,
+                        1.5,
+                        i < 2 ? -2.5 : 2.5
+                    );
+                    vehicleGroup.add(decor);
+                }
+                break;
+                
+            case 'coasterCar':
+                // Futuristic space fighter
+                const fighterGeometry = new THREE.BoxGeometry(2.5, 1.2, 5);
+                const fighterMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                const fighter = new THREE.Mesh(fighterGeometry, fighterMaterial);
+                fighter.position.y = 1;
+                vehicleGroup.add(fighter);
+                
+                // Cockpit seats
+                for (let i = 0; i < 2; i++) {
+                    const cockpitGeometry = new THREE.SphereGeometry(0.8, 8, 6);
+                    const cockpitMaterial = new THREE.MeshPhongMaterial({ 
+                        color: 0x0066cc,
+                        transparent: true,
+                        opacity: 0.7
+                    });
+                    const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+                    cockpit.position.set(0, 1.8, i * 2 - 0.5);
+                    cockpit.userData.seatId = i;
+                    vehicleGroup.add(cockpit);
+                }
+                break;
+                
+            case 'raftBoat':
+                // Inflatable raft
+                const raftGeometry = new THREE.CylinderGeometry(3, 3, 0.5, 8);
+                const raftMaterial = new THREE.MeshPhongMaterial({ color: 0xff6600 });
+                const raft = new THREE.Mesh(raftGeometry, raftMaterial);
+                raft.position.y = 0.25;
+                vehicleGroup.add(raft);
+                
+                // Seating area
+                const seatingGeometry = new THREE.RingGeometry(1, 2.5, 8);
+                const seatingMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+                const seating = new THREE.Mesh(seatingGeometry, seatingMaterial);
+                seating.position.y = 0.6;
+                seating.rotation.x = -Math.PI / 2;
+                vehicleGroup.add(seating);
+                break;
+        }
+        
+        vehicleGroup.position.set(vehicleData.position.x, 0, vehicleData.position.z);
+        vehicleGroup.userData = {
+            type: 'rideVehicle',
+            vehicleType: vehicleData.type,
+            name: vehicleData.name,
+            canRide: true,
+            isOccupied: false,
+            seats: vehicleData.type === 'mummyCart' || vehicleData.type === 'coasterCar' ? 2 : 4,
+            interactionRange: 4,
+            ridePath: [],
+            rideActive: false,
+            rideStartTime: 0
+        };
+        
+        return vehicleGroup;
+    }
+    
     startWorldEvents() {
         console.log('🎪 Starting dynamic world events...');
         
@@ -2636,6 +2917,342 @@ class MinaAdventureGame {
         }, 2000);
     }
     
+    // ===== BUILDING INTERIOR & RIDE VEHICLE UPDATE FUNCTIONS =====
+    
+    updateBuildingInteriors(deltaTime) {
+        if (!this.mina) return;
+        
+        // Check for building entrance/exit
+        this.buildings.forEach(building => {
+            if (building.userData.type === 'interior') {
+                const parentBuilding = building.userData.parentBuilding;
+                const distance = this.mina.position.distanceTo(parentBuilding.position);
+                
+                // Check if player wants to enter building
+                if (distance < building.userData.entranceRange && !this.currentInterior) {
+                    if (this.controls.forward || this.controls.run) {
+                        this.enterBuilding(building);
+                    }
+                }
+                
+                // If inside, check for exit
+                if (this.currentInterior === building) {
+                    const interiorCenter = building.position.clone();
+                    interiorCenter.y = this.mina.position.y;
+                    const interiorDistance = this.mina.position.distanceTo(interiorCenter);
+                    
+                    // Exit if player moves too far from center or presses run
+                    if (interiorDistance > 12 || this.controls.run) {
+                        this.exitBuilding();
+                    }
+                }
+            }
+        });
+        
+        // Update entrance ring animations
+        this.scene.traverse(object => {
+            if (object.userData.type === 'entrance') {
+                const time = this.clock.getElapsedTime();
+                object.rotation.z = time + object.userData.animationOffset;
+                object.material.opacity = 0.2 + Math.sin(time * 2) * 0.2;
+            }
+        });
+    }
+    
+    updateRideVehicles(deltaTime) {
+        if (!this.mina) return;
+        
+        const time = this.clock.getElapsedTime();
+        
+        this.rideVehicles.forEach(vehicle => {
+            const userData = vehicle.userData;
+            const distance = vehicle.position.distanceTo(this.mina.position);
+            
+            // Check for ride interaction
+            if (distance < userData.interactionRange && !userData.isOccupied) {
+                if (this.controls.forward || this.controls.run) {
+                    this.startRideExperience(vehicle);
+                }
+            }
+            
+            // Update active rides
+            if (userData.rideActive) {
+                this.updateRideMotion(vehicle, deltaTime);
+            }
+            
+            // Visual animations for vehicles
+            switch(userData.vehicleType) {
+                case 'mummyCart':
+                    // Gentle swaying motion
+                    vehicle.rotation.z = Math.sin(time * 1.5) * 0.02;
+                    vehicle.position.y = Math.sin(time * 2) * 0.05;
+                    break;
+                    
+                case 'coasterCar':
+                    // Hovering effect
+                    vehicle.position.y = 0.5 + Math.sin(time * 3) * 0.1;
+                    // Cockpit glow
+                    vehicle.children.forEach(child => {
+                        if (child.material && child.material.transparent) {
+                            child.material.opacity = 0.5 + Math.sin(time * 4) * 0.2;
+                        }
+                    });
+                    break;
+                    
+                case 'raftBoat':
+                    // Floating on water motion
+                    vehicle.rotation.x = Math.sin(time * 1.8) * 0.05;
+                    vehicle.rotation.z = Math.cos(time * 1.2) * 0.03;
+                    vehicle.position.y = Math.sin(time * 2.5) * 0.08;
+                    break;
+            }
+        });
+    }
+    
+    enterBuilding(building) {
+        console.log(`🏺 Entering ${building.userData.name}`);
+        
+        // Hide exterior world
+        this.scene.traverse(object => {
+            if (object !== building && object.parent === this.scene) {
+                object.visible = false;
+            }
+        });
+        
+        // Show interior
+        building.visible = true;
+        this.currentInterior = building;
+        
+        // Move characters to interior
+        const interiorCenter = building.position.clone();
+        this.mina.position.copy(interiorCenter);
+        this.mina.position.y = 1;
+        
+        if (this.sacha) {
+            this.sacha.position.copy(interiorCenter);
+            this.sacha.position.x += 2;
+            this.sacha.position.y = 1;
+        }
+        
+        // Show entry message
+        this.showNPCDialogue('Tomb Guide', 'Welcome to the ancient tomb! Explore and find treasures!');
+        
+        // Make characters react with excitement
+        this.playCharacterAnimation(this.mina, 'jumping', 2000);
+        this.playCharacterAnimation(this.sacha, 'scared', 1500);
+    }
+    
+    exitBuilding() {
+        if (!this.currentInterior) return;
+        
+        console.log(`🏺 Exiting ${this.currentInterior.userData.name}`);
+        
+        // Hide interior
+        this.currentInterior.visible = false;
+        
+        // Show exterior world
+        this.scene.traverse(object => {
+            if (object.parent === this.scene) {
+                object.visible = true;
+            }
+        });
+        
+        // Move characters back outside
+        const exitPosition = this.currentInterior.userData.parentBuilding.position.clone();
+        exitPosition.z += 8; // Outside the building
+        this.mina.position.copy(exitPosition);
+        this.mina.position.y = 1;
+        
+        if (this.sacha) {
+            this.sacha.position.copy(exitPosition);
+            this.sacha.position.x += 2;
+            this.sacha.position.y = 1;
+        }
+        
+        this.currentInterior = null;
+        
+        this.showNPCDialogue('Tomb Guide', 'Come back anytime for more adventures!');
+    }
+    
+    startRideExperience(vehicle) {
+        const userData = vehicle.userData;
+        if (userData.isOccupied || userData.rideActive) return;
+        
+        console.log(`🎢 Starting ride: ${userData.name}`);
+        
+        userData.isOccupied = true;
+        userData.rideActive = true;
+        userData.rideStartTime = Date.now();
+        
+        // Move characters onto the ride
+        this.mina.position.copy(vehicle.position);
+        this.mina.position.y += 2;
+        this.mina.parent = vehicle; // Attach to vehicle
+        
+        if (this.sacha) {
+            this.sacha.position.copy(vehicle.position);
+            this.sacha.position.x += 1.5;
+            this.sacha.position.y += 2;
+            this.sacha.parent = vehicle; // Attach to vehicle
+        }
+        
+        // Create ride path based on vehicle type
+        this.createRidePath(vehicle);
+        
+        // Show ride start message and character reactions
+        switch(userData.vehicleType) {
+            case 'mummyCart':
+                this.showNPCDialogue('Ride Operator', 'Hold on tight! The mummy adventure begins!');
+                this.playCharacterAnimation(this.mina, 'scared', 3000);
+                this.playCharacterAnimation(this.sacha, 'jumping', 2000);
+                break;
+                
+            case 'coasterCar':
+                this.showNPCDialogue('Flight Commander', 'Pilots ready! Launching Battlestar fighters!');
+                this.playCharacterAnimation(this.mina, 'jumping', 4000);
+                this.playCharacterAnimation(this.sacha, 'laughing', 3000);
+                break;
+                
+            case 'raftBoat':
+                this.showNPCDialogue('River Guide', 'Welcome aboard! Watch out for dinosaurs!');
+                this.playCharacterAnimation(this.mina, 'laughing', 3000);
+                this.playCharacterAnimation(this.sacha, 'jumping', 2500);
+                break;
+        }
+        
+        // End ride after duration
+        setTimeout(() => {
+            this.endRideExperience(vehicle);
+        }, 15000); // 15 second ride
+    }
+    
+    createRidePath(vehicle) {
+        const userData = vehicle.userData;
+        const startPos = vehicle.position.clone();
+        userData.ridePath = [];
+        userData.pathIndex = 0;
+        
+        // Create different paths for different ride types
+        switch(userData.vehicleType) {
+            case 'mummyCart':
+                // Circular path around the tomb area
+                for (let i = 0; i < 20; i++) {
+                    const angle = (i / 20) * Math.PI * 2;
+                    userData.ridePath.push({
+                        x: startPos.x + Math.cos(angle) * 15,
+                        y: startPos.y + Math.sin(i * 0.5) * 2,
+                        z: startPos.z + Math.sin(angle) * 15
+                    });
+                }
+                break;
+                
+            case 'coasterCar':
+                // High-speed loop with elevation changes
+                for (let i = 0; i < 30; i++) {
+                    const angle = (i / 30) * Math.PI * 4; // 2 full loops
+                    userData.ridePath.push({
+                        x: startPos.x + Math.cos(angle) * 20,
+                        y: startPos.y + Math.sin(i * 0.3) * 8 + 5, // Higher elevation
+                        z: startPos.z + Math.sin(angle) * 20
+                    });
+                }
+                break;
+                
+            case 'raftBoat':
+                // Winding river path
+                for (let i = 0; i < 25; i++) {
+                    const t = i / 25;
+                    userData.ridePath.push({
+                        x: startPos.x + Math.sin(t * Math.PI * 3) * 18,
+                        y: startPos.y + Math.random() * 0.5, // Small height variation
+                        z: startPos.z + (t - 0.5) * 35
+                    });
+                }
+                break;
+        }
+    }
+    
+    updateRideMotion(vehicle, deltaTime) {
+        const userData = vehicle.userData;
+        const rideDuration = Date.now() - userData.rideStartTime;
+        
+        if (userData.ridePath.length === 0) return;
+        
+        // Calculate progress through ride (0 to 1)
+        const progress = Math.min(rideDuration / 15000, 1); // 15 second ride
+        const targetIndex = Math.floor(progress * userData.ridePath.length);
+        
+        if (targetIndex < userData.ridePath.length) {
+            const targetPos = userData.ridePath[targetIndex];
+            
+            // Smooth movement to next point
+            vehicle.position.lerp(new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z), deltaTime * 3);
+            
+            // Add ride-specific effects
+            switch(userData.vehicleType) {
+                case 'mummyCart':
+                    vehicle.rotation.y = Math.atan2(
+                        userData.ridePath[(targetIndex + 1) % userData.ridePath.length].x - targetPos.x,
+                        userData.ridePath[(targetIndex + 1) % userData.ridePath.length].z - targetPos.z
+                    );
+                    break;
+                    
+                case 'coasterCar':
+                    // Banking on turns
+                    vehicle.rotation.z = Math.sin(progress * Math.PI * 8) * 0.3;
+                    break;
+                    
+                case 'raftBoat':
+                    // Splashing motion
+                    vehicle.rotation.x = Math.sin(progress * 20) * 0.1;
+                    break;
+            }
+        }
+    }
+    
+    endRideExperience(vehicle) {
+        const userData = vehicle.userData;
+        
+        console.log(`🎢 Ending ride: ${userData.name}`);
+        
+        userData.isOccupied = false;
+        userData.rideActive = false;
+        userData.ridePath = [];
+        
+        // Detach characters from vehicle and move them near the exit
+        if (this.mina.parent === vehicle) {
+            this.scene.add(this.mina);
+            this.mina.position.copy(vehicle.position);
+            this.mina.position.z += 5; // Move away from vehicle
+            this.mina.position.y = 1;
+        }
+        
+        if (this.sacha && this.sacha.parent === vehicle) {
+            this.scene.add(this.sacha);
+            this.sacha.position.copy(vehicle.position);
+            this.sacha.position.x += 2;
+            this.sacha.position.z += 5;
+            this.sacha.position.y = 1;
+        }
+        
+        // Return vehicle to starting position
+        setTimeout(() => {
+            vehicle.position.set(
+                userData.vehicleType === 'mummyCart' ? -75 : 
+                userData.vehicleType === 'coasterCar' ? 75 : -75,
+                0,
+                userData.vehicleType === 'mummyCart' ? 5 : 
+                userData.vehicleType === 'coasterCar' ? -75 : -75
+            );
+            vehicle.rotation.set(0, 0, 0);
+        }, 2000);
+        
+        // Show ride completion message
+        this.showNPCDialogue('Ride Operator', 'Thanks for riding! Come back anytime!');
+        this.playCharacterAnimation(this.mina, 'laughing', 3000);
+        this.playCharacterAnimation(this.sacha, 'jumping', 2000);
+    }
+    
     createSpeechBubble(speaker, text) {
         // Remove existing bubble
         if (this.speechSystem.currentBubble) {
@@ -3321,6 +3938,8 @@ class MinaAdventureGame {
             this.updateInteractiveNPCs(deltaTime);
             this.updateCrowds(deltaTime);
             this.updateRides(deltaTime);
+            this.updateBuildingInteriors(deltaTime);
+            this.updateRideVehicles(deltaTime);
             this.updateWorldEvents(deltaTime);
         } else {
             console.log('Movement blocked - mouseLocked:', this.mouseLocked, 'gameOver:', this.gameState.gameOver, 'gameWon:', this.gameState.gameWon);
