@@ -563,7 +563,7 @@ class MinaAdventureGame {
         console.log('Creating Mina at position:', this.minaPosition);
         try {
             // Create a simple test version first to ensure basic functionality works
-            const testSimple = false; // Try detailed character
+            const testSimple = true; // Use simple red cube for debugging
             
             if (testSimple) {
                 // Simple cube version for testing - LARGE and BRIGHT

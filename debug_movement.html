@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movement Debug Test</title>
+    <style>
+        body {
+            margin: 0;
+            background: #333;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            font-size: 14px;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+        
+        .btn {
+            display: inline-block;
+            margin: 5px;
+            padding: 20px;
+            background: rgba(255,255,255,0.8);
+            border: 3px solid black;
+            font-size: 18px;
+            font-weight: bold;
+            color: black;
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        
+        .btn:active {
+            background: red !important;
+            transform: scale(1.2);
+        }
+        
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div>Position: <span id="position">0, 0, 0</span></div>
+        <div>Controls: <span id="controlState">none</span></div>
+        <div>Movement: <span id="movement">stopped</span></div>
+    </div>
+    
+    <div id="controls">
+        <div class="btn" id="upBtn">↑ UP</div><br>
+        <div class="btn" id="leftBtn">← LEFT</div>
+        <div class="btn" id="rightBtn">→ RIGHT</div><br>
+        <div class="btn" id="downBtn">↓ DOWN</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.140.0/build/three.min.js"></script>
+    <script>
+        console.log('🔧 Starting movement debug test...');
+        
+        // Simple game state
+        const state = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false
+        };
+        
+        // Three.js setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Create a simple cube character
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshBasicMaterial({ color: 0xff69b4 });
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.set(0, 0, 0);
+        scene.add(cube);
+        
+        // Add ground for reference
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x90EE90 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -2;
+        scene.add(ground);
+        
+        // Position camera
+        camera.position.set(0, 5, 10);
+        camera.lookAt(cube.position);
+        
+        // UI Elements
+        const positionDisplay = document.getElementById('position');
+        const controlDisplay = document.getElementById('controlState');
+        const movementDisplay = document.getElementById('movement');
+        
+        // Button controls
+        const buttons = {
+            up: document.getElementById('upBtn'),
+            down: document.getElementById('downBtn'),
+            left: document.getElementById('leftBtn'),
+            right: document.getElementById('rightBtn')
+        };
+        
+        // Control handlers
+        function setControl(controlName, value) {
+            state[controlName] = value;
+            console.log(`${controlName} = ${value}`, state);
+            updateUI();
+        }
+        
+        function updateUI() {
+            const activeControls = Object.keys(state).filter(key => state[key]);
+            controlDisplay.textContent = activeControls.length > 0 ? activeControls.join(', ') : 'none';
+            
+            const pos = cube.position;
+            positionDisplay.textContent = `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
+            
+            const isMoving = Object.values(state).some(v => v);
+            movementDisplay.textContent = isMoving ? 'MOVING' : 'stopped';
+            movementDisplay.style.color = isMoving ? 'lime' : 'white';
+        }
+        
+        // Set up button events
+        Object.entries(buttons).forEach(([direction, button]) => {
+            if (!button) return;
+            
+            const controlMap = {
+                up: 'forward',
+                down: 'backward',
+                left: 'left',
+                right: 'right'
+            };
+            
+            const controlName = controlMap[direction];
+            
+            // Multiple event types for reliability
+            ['touchstart', 'mousedown', 'pointerdown'].forEach(event => {
+                button.addEventListener(event, (e) => {
+                    e.preventDefault();
+                    console.log(`${direction} button pressed!`);
+                    setControl(controlName, true);
+                    button.style.background = 'red';
+                }, { passive: false });
+            });
+            
+            ['touchend', 'touchcancel', 'mouseup', 'mouseleave', 'pointerup'].forEach(event => {
+                button.addEventListener(event, (e) => {
+                    e.preventDefault();
+                    console.log(`${direction} button released!`);
+                    setControl(controlName, false);
+                    button.style.background = 'rgba(255,255,255,0.8)';
+                }, { passive: false });
+            });
+        });
+        
+        // Movement speed
+        const speed = 5;
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = 0.016; // ~60fps
+            
+            // Apply movement
+            if (state.forward) cube.position.z -= speed * deltaTime;
+            if (state.backward) cube.position.z += speed * deltaTime;
+            if (state.left) cube.position.x -= speed * deltaTime;
+            if (state.right) cube.position.x += speed * deltaTime;
+            
+            // Update camera to follow cube
+            camera.position.x = cube.position.x;
+            camera.position.z = cube.position.z + 10;
+            camera.lookAt(cube.position);
+            
+            updateUI();
+            renderer.render(scene, camera);
+        }
+        
+        // Keyboard controls for desktop testing
+        document.addEventListener('keydown', (e) => {
+            switch(e.code) {
+                case 'KeyW': case 'ArrowUp': setControl('forward', true); break;
+                case 'KeyS': case 'ArrowDown': setControl('backward', true); break;
+                case 'KeyA': case 'ArrowLeft': setControl('left', true); break;
+                case 'KeyD': case 'ArrowRight': setControl('right', true); break;
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'KeyW': case 'ArrowUp': setControl('forward', false); break;
+                case 'KeyS': case 'ArrowDown': setControl('backward', false); break;
+                case 'KeyA': case 'ArrowLeft': setControl('left', false); break;
+                case 'KeyD': case 'ArrowRight': setControl('right', false); break;
+            }
+        });
+        
+        // Prevent scrolling
+        document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+        
+        console.log('🚀 Debug test ready! Try the buttons or WASD keys');
+        animate();
+    </script>
+</body>
+</html>
