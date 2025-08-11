@@ -44,6 +44,10 @@ class MinaAdventureGame {
         this.interactables = [];
         this.collisionObjects = []; // All objects that can be collided with
         this.npcs = []; // Non-player characters
+        this.crowds = []; // Moving crowds of people
+        this.rides = []; // Interactive theme park rides
+        this.worldEvents = []; // Dynamic events happening in the world
+        this.interactiveNPCs = []; // NPCs that can talk to the girls
         
         // Controls
         this.controls = {
@@ -101,6 +105,10 @@ class MinaAdventureGame {
         this.placeTreasures();
         this.spawnMonsters();
         this.createNPCs();
+        this.createInteractiveNPCs();
+        this.createCrowdSystem();
+        this.createThemeRides();
+        this.startWorldEvents();
         this.addParticleEffects();
         this.animate();
     }
@@ -1594,6 +1602,324 @@ class MinaAdventureGame {
         return monsterGroup;
     }
     
+    // ===== DYNAMIC WORLD SYSTEMS =====
+    
+    createInteractiveNPCs() {
+        console.log('🎭 Creating interactive NPCs...');
+        
+        const interactiveNPCData = [
+            // Park Staff who interact with guests
+            { x: 10, z: 90, type: 'staff', name: 'Emma the Guide', 
+              dialogues: [
+                'Welcome to Universal Studios Singapore!',
+                'The Mummy ride is really scary but so much fun!',
+                'Have you tried the Jurassic Park ride yet?',
+                'Don\'t miss the Far Far Away castle!'
+              ]
+            },
+            { x: -20, z: 30, type: 'vendor', name: 'Carlos the Snack Man',
+              dialogues: [
+                'Fresh popcorn! Get your popcorn here!',
+                'Would you like some cotton candy?',
+                'Best ice cream in the whole park!',
+                'Stay hydrated, girls!'
+              ]
+            },
+            { x: -70, z: 10, type: 'photographer', name: 'Maya the Photo Lady',
+              dialogues: [
+                'Perfect! Hold that pose!',
+                'You two look amazing together!',
+                'Want a photo with the pyramid?',
+                'Say cheese for the camera!'
+              ]
+            },
+            { x: 70, z: -70, type: 'mechanic', name: 'Tech Mike',
+              dialogues: [
+                'The robots here are so cool!',
+                'This is the future of theme parks!',
+                'Did you see the holographic displays?',
+                'Technology is amazing, isn\'t it?'
+              ]
+            },
+            { x: -70, z: 70, type: 'princess', name: 'Princess Fiona',
+              dialogues: [
+                'Welcome to Far Far Away!',
+                'Have you seen Shrek around?',
+                'This castle is magical!',
+                'Dreams really do come true here!'
+              ]
+            }
+        ];
+        
+        interactiveNPCData.forEach(npcData => {
+            const npc = this.createDetailedNPC(npcData);
+            this.interactiveNPCs.push(npc);
+            this.scene.add(npc);
+        });
+    }
+    
+    createDetailedNPC(npcData) {
+        const npcGroup = new THREE.Group();
+        
+        // More detailed character than regular NPCs
+        const scale = 2.5;
+        
+        // Body
+        const bodyGeometry = new THREE.BoxGeometry(0.4 * scale, 0.6 * scale, 0.2 * scale);
+        const bodyColor = npcData.type === 'staff' ? 0x0066cc : 
+                         npcData.type === 'vendor' ? 0xff6600 :
+                         npcData.type === 'photographer' ? 0x9966cc :
+                         npcData.type === 'mechanic' ? 0x333333 :
+                         0xff69b4; // princess
+                         
+        const bodyMaterial = new THREE.MeshPhongMaterial({ color: bodyColor });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.3 * scale;
+        body.castShadow = true;
+        npcGroup.add(body);
+        
+        // Head
+        const headGeometry = new THREE.SphereGeometry(0.15 * scale, 16, 12);
+        const headMaterial = new THREE.MeshPhongMaterial({ color: 0xffdbac });
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.y = 0.75 * scale;
+        head.castShadow = true;
+        npcGroup.add(head);
+        
+        // Special accessories based on type
+        if (npcData.type === 'staff') {
+            // Staff hat
+            const hatGeometry = new THREE.CylinderGeometry(0.18 * scale, 0.18 * scale, 0.1 * scale);
+            const hatMaterial = new THREE.MeshPhongMaterial({ color: 0x003366 });
+            const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+            hat.position.y = 0.85 * scale;
+            npcGroup.add(hat);
+        } else if (npcData.type === 'photographer') {
+            // Camera
+            const cameraGeometry = new THREE.BoxGeometry(0.2 * scale, 0.15 * scale, 0.1 * scale);
+            const cameraMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+            const camera = new THREE.Mesh(cameraGeometry, cameraMaterial);
+            camera.position.set(0.3 * scale, 0.4 * scale, 0.2 * scale);
+            npcGroup.add(camera);
+        }
+        
+        // Position and data
+        npcGroup.position.set(npcData.x, 0, npcData.z);
+        npcGroup.userData = {
+            type: 'interactiveNPC',
+            name: npcData.name,
+            dialogues: npcData.dialogues,
+            lastInteraction: 0,
+            currentDialogue: 0,
+            isInteracting: false,
+            interactionRange: 8,
+            personality: npcData.type
+        };
+        
+        return npcGroup;
+    }
+    
+    createCrowdSystem() {
+        console.log('👥 Creating crowd system...');
+        
+        // Create moving groups of people
+        const crowdGroups = [
+            // Hollywood entrance crowd
+            { centerX: 0, centerZ: 100, count: 8, radius: 15, speed: 0.5 },
+            // Lagoon walkers
+            { centerX: 0, centerZ: 0, count: 12, radius: 25, speed: 0.3 },
+            // Sci-Fi City visitors
+            { centerX: 80, centerZ: -80, count: 6, radius: 20, speed: 0.7 },
+            // Egypt explorers
+            { centerX: -80, centerZ: 0, count: 5, radius: 18, speed: 0.4 },
+            // Castle visitors
+            { centerX: -80, centerZ: 80, count: 7, radius: 22, speed: 0.6 }
+        ];
+        
+        crowdGroups.forEach((groupData, groupIndex) => {
+            const crowd = [];
+            for (let i = 0; i < groupData.count; i++) {
+                const person = this.createCrowdPerson();
+                
+                // Random position within the group's area
+                const angle = (i / groupData.count) * Math.PI * 2;
+                const distance = Math.random() * groupData.radius;
+                person.position.set(
+                    groupData.centerX + Math.cos(angle) * distance,
+                    0,
+                    groupData.centerZ + Math.sin(angle) * distance
+                );
+                
+                person.userData.groupId = groupIndex;
+                person.userData.groupCenter = { x: groupData.centerX, z: groupData.centerZ };
+                person.userData.groupRadius = groupData.radius;
+                person.userData.baseSpeed = groupData.speed;
+                person.userData.direction = Math.random() * Math.PI * 2;
+                person.userData.directionChangeTime = 0;
+                
+                crowd.push(person);
+                this.scene.add(person);
+            }
+            this.crowds.push(crowd);
+        });
+    }
+    
+    createCrowdPerson() {
+        const personGroup = new THREE.Group();
+        const scale = 1.5 + Math.random() * 0.5; // Varied sizes
+        
+        // Simple but distinctive character
+        const bodyGeometry = new THREE.CylinderGeometry(0.15 * scale, 0.2 * scale, 0.8 * scale);
+        const colors = [0xff6b6b, 0x4ecdc4, 0x45b7d1, 0xf9ca24, 0xf0932b, 0xeb4d4b, 0x6c5ce7];
+        const bodyMaterial = new THREE.MeshPhongMaterial({ 
+            color: colors[Math.floor(Math.random() * colors.length)] 
+        });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 0.4 * scale;
+        body.castShadow = true;
+        personGroup.add(body);
+        
+        // Head
+        const headGeometry = new THREE.SphereGeometry(0.12 * scale, 8, 6);
+        const headMaterial = new THREE.MeshPhongMaterial({ color: 0xffdbac });
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.y = 0.9 * scale;
+        head.castShadow = true;
+        personGroup.add(head);
+        
+        personGroup.userData.type = 'crowdPerson';
+        personGroup.userData.walkSpeed = 0.5 + Math.random() * 0.5;
+        
+        return personGroup;
+    }
+    
+    createThemeRides() {
+        console.log('🎢 Creating interactive theme rides...');
+        
+        const rides = [
+            // Roller Coaster in Sci-Fi City
+            { x: 75, z: -75, type: 'rollercoaster', name: 'Battlestar Galactica' },
+            // Mummy ride in Egypt
+            { x: -75, z: 5, type: 'indoor', name: 'Revenge of the Mummy' },
+            // Castle ride in Far Far Away
+            { x: -75, z: 75, type: 'family', name: 'Shrek 4-D Adventure' },
+            // Water ride in Lost World
+            { x: -75, z: -75, type: 'water', name: 'Jurassic Park Rapids' }
+        ];
+        
+        rides.forEach(rideData => {
+            const ride = this.createRide(rideData);
+            this.rides.push(ride);
+            this.scene.add(ride);
+        });
+    }
+    
+    createRide(rideData) {
+        const rideGroup = new THREE.Group();
+        
+        // Base platform
+        const platformGeometry = new THREE.BoxGeometry(8, 0.5, 8);
+        const platformMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+        const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+        platform.position.y = 0.25;
+        rideGroup.add(platform);
+        
+        // Ride-specific elements
+        switch(rideData.type) {
+            case 'rollercoaster':
+                // Add track pieces
+                for (let i = 0; i < 5; i++) {
+                    const trackGeometry = new THREE.BoxGeometry(1, 0.2, 0.3);
+                    const trackMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+                    const track = new THREE.Mesh(trackGeometry, trackMaterial);
+                    track.position.set(i * 1.5 - 3, 1 + i * 0.5, 0);
+                    track.rotation.x = i * 0.2;
+                    rideGroup.add(track);
+                }
+                break;
+                
+            case 'indoor':
+                // Pyramid entrance
+                const pyramidGeometry = new THREE.ConeGeometry(4, 6, 4);
+                const pyramidMaterial = new THREE.MeshPhongMaterial({ color: 0xdaa520 });
+                const pyramid = new THREE.Mesh(pyramidGeometry, pyramidMaterial);
+                pyramid.position.y = 3.5;
+                pyramid.rotation.y = Math.PI / 4;
+                rideGroup.add(pyramid);
+                break;
+                
+            case 'family':
+                // Castle tower
+                const towerGeometry = new THREE.CylinderGeometry(2, 2.5, 8);
+                const towerMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 });
+                const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+                tower.position.y = 4.5;
+                rideGroup.add(tower);
+                break;
+                
+            case 'water':
+                // Water splash effect placeholder
+                const splashGeometry = new THREE.SphereGeometry(3, 8, 6);
+                const splashMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0x87ceeb, 
+                    transparent: true, 
+                    opacity: 0.6 
+                });
+                const splash = new THREE.Mesh(splashGeometry, splashMaterial);
+                splash.position.y = 3;
+                splash.scale.y = 0.3;
+                rideGroup.add(splash);
+                break;
+        }
+        
+        rideGroup.position.set(rideData.x, 0, rideData.z);
+        rideGroup.userData = {
+            type: 'ride',
+            name: rideData.name,
+            rideType: rideData.type,
+            isActive: true,
+            interactionRange: 6,
+            lastActivation: 0
+        };
+        
+        return rideGroup;
+    }
+    
+    startWorldEvents() {
+        console.log('🎪 Starting dynamic world events...');
+        
+        // Create periodic events
+        this.worldEvents = [
+            {
+                name: 'Parade',
+                type: 'moving',
+                startTime: Date.now() + 10000, // Start in 10 seconds
+                duration: 30000, // 30 seconds
+                interval: 120000, // Every 2 minutes
+                active: false,
+                participants: []
+            },
+            {
+                name: 'Fireworks',
+                type: 'stationary',
+                startTime: Date.now() + 60000, // Start in 1 minute
+                duration: 15000, // 15 seconds
+                interval: 180000, // Every 3 minutes
+                active: false,
+                position: { x: 0, y: 20, z: 0 }
+            },
+            {
+                name: 'Character Meet',
+                type: 'interactive',
+                startTime: Date.now() + 30000, // Start in 30 seconds
+                duration: 45000, // 45 seconds
+                interval: 240000, // Every 4 minutes
+                active: false,
+                character: null
+            }
+        ];
+    }
+    
     setupEventListeners() {
         document.addEventListener('click', () => {
             if (!this.mouseLocked) {
@@ -1996,6 +2322,318 @@ class MinaAdventureGame {
         
         // Jumping when collecting treasures (triggered elsewhere)
         // This function is called from treasure collection
+    }
+    
+    // ===== DYNAMIC WORLD UPDATE FUNCTIONS =====
+    
+    updateInteractiveNPCs(deltaTime) {
+        if (!this.mina) return;
+        
+        this.interactiveNPCs.forEach(npc => {
+            const distance = npc.position.distanceTo(this.mina.position);
+            
+            // Check if girls are close enough for interaction
+            if (distance < npc.userData.interactionRange) {
+                const now = Date.now();
+                
+                // Only interact every 5 seconds to avoid spam
+                if (now - npc.userData.lastInteraction > 5000) {
+                    npc.userData.lastInteraction = now;
+                    
+                    // Show dialogue from this NPC
+                    const dialogue = npc.userData.dialogues[npc.userData.currentDialogue];
+                    this.showNPCDialogue(npc.userData.name, dialogue);
+                    
+                    // Cycle through dialogues
+                    npc.userData.currentDialogue = 
+                        (npc.userData.currentDialogue + 1) % npc.userData.dialogues.length;
+                    
+                    // Make characters react
+                    if (npc.userData.personality === 'photographer') {
+                        this.playCharacterAnimation(this.mina, 'laughing', 1500);
+                        this.playCharacterAnimation(this.sacha, 'jumping', 1000);
+                    } else if (npc.userData.personality === 'vendor') {
+                        this.playCharacterAnimation(this.mina, 'jumping', 1000);
+                    }
+                }
+            }
+            
+            // NPCs look at nearby characters
+            if (distance < 15) {
+                npc.lookAt(this.mina.position);
+            }
+            
+            // Simple idle animation for NPCs
+            const time = this.clock.getElapsedTime();
+            npc.position.y = Math.sin(time * 2 + npc.position.x) * 0.02;
+        });
+    }
+    
+    updateCrowds(deltaTime) {
+        this.crowds.forEach(crowd => {
+            crowd.forEach(person => {
+                const userData = person.userData;
+                const time = this.clock.getElapsedTime();
+                
+                // Change direction occasionally
+                userData.directionChangeTime += deltaTime;
+                if (userData.directionChangeTime > 3 + Math.random() * 4) {
+                    userData.direction = Math.random() * Math.PI * 2;
+                    userData.directionChangeTime = 0;
+                }
+                
+                // Move in current direction
+                const speed = userData.baseSpeed * (0.8 + Math.random() * 0.4);
+                const moveX = Math.cos(userData.direction) * speed * deltaTime;
+                const moveZ = Math.sin(userData.direction) * speed * deltaTime;
+                
+                // Keep within group bounds
+                const newX = person.position.x + moveX;
+                const newZ = person.position.z + moveZ;
+                const centerDistance = Math.sqrt(
+                    Math.pow(newX - userData.groupCenter.x, 2) + 
+                    Math.pow(newZ - userData.groupCenter.z, 2)
+                );
+                
+                if (centerDistance < userData.groupRadius) {
+                    person.position.x = newX;
+                    person.position.z = newZ;
+                    
+                    // Face movement direction
+                    person.rotation.y = userData.direction;
+                } else {
+                    // Turn towards group center
+                    userData.direction = Math.atan2(
+                        userData.groupCenter.z - person.position.z,
+                        userData.groupCenter.x - person.position.x
+                    );
+                }
+                
+                // Simple walking animation
+                person.position.y = Math.sin(time * userData.walkSpeed * 8) * 0.03;
+                
+                // Avoid getting too close to Mina and Sacha
+                if (this.mina) {
+                    const distanceToMina = person.position.distanceTo(this.mina.position);
+                    if (distanceToMina < 3) {
+                        const avoidDirection = Math.atan2(
+                            person.position.z - this.mina.position.z,
+                            person.position.x - this.mina.position.x
+                        );
+                        person.position.x += Math.cos(avoidDirection) * deltaTime * 2;
+                        person.position.z += Math.sin(avoidDirection) * deltaTime * 2;
+                    }
+                }
+            });
+        });
+    }
+    
+    updateRides(deltaTime) {
+        const time = this.clock.getElapsedTime();
+        
+        this.rides.forEach(ride => {
+            const userData = ride.userData;
+            
+            // Animate rides based on type
+            switch(userData.rideType) {
+                case 'rollercoaster':
+                    // Track pieces moving up and down
+                    ride.children.forEach((piece, index) => {
+                        if (piece.geometry.type === 'BoxGeometry') {
+                            piece.position.y = 1 + index * 0.5 + Math.sin(time * 2 + index) * 0.2;
+                        }
+                    });
+                    break;
+                    
+                case 'indoor':
+                    // Pyramid rotating slowly
+                    const pyramid = ride.children.find(child => child.geometry.type === 'ConeGeometry');
+                    if (pyramid) {
+                        pyramid.rotation.y += deltaTime * 0.5;
+                    }
+                    break;
+                    
+                case 'family':
+                    // Tower swaying gently
+                    const tower = ride.children.find(child => child.geometry.type === 'CylinderGeometry');
+                    if (tower) {
+                        tower.rotation.z = Math.sin(time * 1.5) * 0.05;
+                    }
+                    break;
+                    
+                case 'water':
+                    // Water splash animation
+                    const splash = ride.children.find(child => 
+                        child.material && child.material.transparent
+                    );
+                    if (splash) {
+                        splash.scale.y = 0.3 + Math.sin(time * 3) * 0.2;
+                        splash.material.opacity = 0.4 + Math.sin(time * 2) * 0.2;
+                    }
+                    break;
+            }
+            
+            // Check for ride interaction
+            if (this.mina && ride.position.distanceTo(this.mina.position) < userData.interactionRange) {
+                const now = Date.now();
+                if (now - userData.lastActivation > 10000) { // Every 10 seconds
+                    userData.lastActivation = now;
+                    this.triggerRideEffect(ride);
+                }
+            }
+        });
+    }
+    
+    updateWorldEvents(deltaTime) {
+        const now = Date.now();
+        
+        this.worldEvents.forEach(event => {
+            // Check if event should start
+            if (!event.active && now >= event.startTime) {
+                this.startWorldEvent(event);
+            }
+            
+            // Check if event should end
+            if (event.active && now >= event.startTime + event.duration) {
+                this.endWorldEvent(event);
+                // Schedule next occurrence
+                event.startTime = now + event.interval;
+            }
+            
+            // Update active events
+            if (event.active) {
+                this.updateActiveEvent(event, deltaTime);
+            }
+        });
+    }
+    
+    showNPCDialogue(npcName, text) {
+        // Create a special NPC speech bubble
+        if (this.speechSystem.currentBubble) {
+            this.removeSpeechBubble();
+        }
+        
+        const bubble = document.createElement('div');
+        bubble.className = 'speech-bubble npc';
+        bubble.innerHTML = `<strong>${npcName}:</strong><br>${text}`;
+        bubble.style.background = 'linear-gradient(45deg, #ffd700, #ffed4e)';
+        bubble.style.color = '#333';
+        bubble.style.display = 'none';
+        
+        document.body.appendChild(bubble);
+        this.speechSystem.currentBubble = bubble;
+        
+        // Position at top center of screen
+        bubble.style.position = 'fixed';
+        bubble.style.top = '20px';
+        bubble.style.left = '50%';
+        bubble.style.transform = 'translateX(-50%)';
+        bubble.style.display = 'block';
+        bubble.style.zIndex = '200';
+        
+        // Auto-remove after 4 seconds
+        setTimeout(() => {
+            if (this.speechSystem.currentBubble === bubble) {
+                this.removeSpeechBubble();
+            }
+        }, 4000);
+    }
+    
+    triggerRideEffect(ride) {
+        const rideName = ride.userData.name;
+        
+        // Visual and animation effects based on ride type
+        switch(ride.userData.rideType) {
+            case 'rollercoaster':
+                this.playCharacterAnimation(this.mina, 'scared', 2000);
+                this.playCharacterAnimation(this.sacha, 'jumping', 1500);
+                this.showNPCDialogue('Ride Operator', 'Hold on tight for Battlestar Galactica!');
+                break;
+                
+            case 'indoor':
+                this.playCharacterAnimation(this.mina, 'scared', 3000);
+                this.playCharacterAnimation(this.sacha, 'scared', 3000);
+                this.showNPCDialogue('Mummy Guide', 'Welcome to the tomb... if you dare!');
+                break;
+                
+            case 'family':
+                this.playCharacterAnimation(this.mina, 'laughing', 2000);
+                this.playCharacterAnimation(this.sacha, 'laughing', 2000);
+                this.showNPCDialogue('Princess Fiona', 'Welcome to our magical 4-D adventure!');
+                break;
+                
+            case 'water':
+                this.playCharacterAnimation(this.mina, 'jumping', 1500);
+                this.playCharacterAnimation(this.sacha, 'laughing', 2000);
+                this.showNPCDialogue('Park Ranger', 'Watch out for the dinosaurs!');
+                break;
+        }
+    }
+    
+    startWorldEvent(event) {
+        event.active = true;
+        console.log(`🎉 Starting world event: ${event.name}`);
+        
+        switch(event.name) {
+            case 'Parade':
+                this.showNPCDialogue('Parade Announcer', '🎊 The Universal Studios parade is starting!');
+                break;
+                
+            case 'Fireworks':
+                this.showNPCDialogue('Show Director', '🎆 Look up! Spectacular fireworks show!');
+                // Trigger happy animations
+                this.playCharacterAnimation(this.mina, 'jumping', 5000);
+                this.playCharacterAnimation(this.sacha, 'laughing', 5000);
+                break;
+                
+            case 'Character Meet':
+                this.showNPCDialogue('Mickey Mouse', '🐭 Hi there! Want to take a photo with me?');
+                this.playCharacterAnimation(this.mina, 'laughing', 3000);
+                this.playCharacterAnimation(this.sacha, 'jumping', 3000);
+                break;
+        }
+    }
+    
+    endWorldEvent(event) {
+        event.active = false;
+        console.log(`🎉 Ending world event: ${event.name}`);
+    }
+    
+    updateActiveEvent(event, deltaTime) {
+        // Event-specific updates while active
+        switch(event.name) {
+            case 'Fireworks':
+                // Create sparkle effects
+                if (Math.random() < 0.3) {
+                    this.createTemporarySparkle();
+                }
+                break;
+        }
+    }
+    
+    createTemporarySparkle() {
+        const sparkleGeometry = new THREE.SphereGeometry(0.1, 6, 4);
+        const sparkleMaterial = new THREE.MeshBasicMaterial({ 
+            color: Math.random() * 0xffffff,
+            transparent: true,
+            opacity: 0.8
+        });
+        const sparkle = new THREE.Mesh(sparkleGeometry, sparkleMaterial);
+        
+        sparkle.position.set(
+            (Math.random() - 0.5) * 40,
+            15 + Math.random() * 10,
+            (Math.random() - 0.5) * 40
+        );
+        
+        this.scene.add(sparkle);
+        
+        // Remove after 2 seconds
+        setTimeout(() => {
+            this.scene.remove(sparkle);
+            sparkleGeometry.dispose();
+            sparkleMaterial.dispose();
+        }, 2000);
     }
     
     createSpeechBubble(speaker, text) {
@@ -2678,6 +3316,12 @@ class MinaAdventureGame {
             
             // Check for monster reactions
             this.checkMonsterReactions();
+            
+            // Update dynamic world systems
+            this.updateInteractiveNPCs(deltaTime);
+            this.updateCrowds(deltaTime);
+            this.updateRides(deltaTime);
+            this.updateWorldEvents(deltaTime);
         } else {
             console.log('Movement blocked - mouseLocked:', this.mouseLocked, 'gameOver:', this.gameState.gameOver, 'gameWon:', this.gameState.gameWon);
         }
