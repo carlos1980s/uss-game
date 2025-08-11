@@ -563,7 +563,7 @@ class MinaAdventureGame {
         console.log('Creating Mina at position:', this.minaPosition);
         try {
             // Create a simple test version first to ensure basic functionality works
-            const testSimple = true; // Use simple red cube for debugging
+            const testSimple = false; // Use detailed character now that movement works
             
             if (testSimple) {
                 // Simple cube version for testing - LARGE and BRIGHT
@@ -1811,6 +1811,193 @@ class MinaAdventureGame {
         console.log('Final control state:', this.controls);
     }
     
+    // Character Animation Functions
+    playCharacterAnimation(character, animationType, duration = 2000) {
+        if (!character || !character.userData || !character.userData.animations) {
+            console.warn('Character missing animation data');
+            return;
+        }
+        
+        const animations = character.userData.animations;
+        animations.currentState = animationType;
+        animations.isAnimating = true;
+        animations.animationDuration = duration;
+        animations.time = 0;
+        
+        console.log(`🎭 Playing ${animationType} animation for ${character.userData.name}`);
+        
+        // Auto-reset to idle after duration
+        setTimeout(() => {
+            if (animations.currentState === animationType) {
+                animations.currentState = 'idle';
+                animations.isAnimating = false;
+            }
+        }, duration);
+    }
+    
+    updateCharacterAnimations(character, deltaTime) {
+        if (!character || !character.userData || !character.userData.animations) return;
+        
+        const animations = character.userData.animations;
+        const bodyParts = character.userData.bodyParts;
+        const time = this.clock.getElapsedTime();
+        
+        // Update animation time
+        animations.idle.time += deltaTime * animations.idle.speed;
+        animations.walking.time += deltaTime * animations.walking.speed;
+        animations.jumping.time += deltaTime * animations.jumping.speed;
+        animations.scared.time += deltaTime * animations.scared.speed;
+        animations.laughing.time += deltaTime * animations.laughing.speed;
+        
+        // Apply current animation
+        switch (animations.currentState) {
+            case 'laughing':
+                this.animateLaughing(character, bodyParts, animations.laughing.time);
+                break;
+            case 'jumping':
+                this.animateJumping(character, bodyParts, animations.jumping.time);
+                break;
+            case 'scared':
+                this.animateScared(character, bodyParts, animations.scared.time);
+                break;
+            case 'walking':
+                this.animateWalking(character, bodyParts, animations.walking.time);
+                break;
+            default: // idle
+                this.animateIdle(character, bodyParts, animations.idle.time);
+                break;
+        }
+    }
+    
+    animateLaughing(character, bodyParts, time) {
+        if (!bodyParts) return;
+        
+        // Head bobbing up and down
+        if (bodyParts.head) {
+            bodyParts.head.position.y = 0.75 + Math.sin(time * 8) * 0.05;
+            bodyParts.head.rotation.z = Math.sin(time * 6) * 0.1;
+        }
+        
+        // Body shaking slightly
+        if (bodyParts.body) {
+            bodyParts.body.rotation.z = Math.sin(time * 10) * 0.03;
+        }
+        
+        // Arms moving up and down
+        if (bodyParts.leftUpperArm) {
+            bodyParts.leftUpperArm.rotation.z = 0.3 + Math.sin(time * 8) * 0.2;
+        }
+        if (bodyParts.rightUpperArm) {
+            bodyParts.rightUpperArm.rotation.z = -0.3 - Math.sin(time * 8) * 0.2;
+        }
+    }
+    
+    animateJumping(character, bodyParts, time) {
+        // Character jumps up and down
+        const jumpHeight = Math.abs(Math.sin(time * 4)) * 1.5;
+        character.position.y = character.userData.animations.originalY + jumpHeight;
+        
+        // Arms spread wide during jump
+        if (bodyParts.leftUpperArm) {
+            bodyParts.leftUpperArm.rotation.z = 0.5 + Math.sin(time * 4) * 0.3;
+        }
+        if (bodyParts.rightUpperArm) {
+            bodyParts.rightUpperArm.rotation.z = -0.5 - Math.sin(time * 4) * 0.3;
+        }
+        
+        // Slight body lean
+        if (bodyParts.body) {
+            bodyParts.body.rotation.x = Math.sin(time * 4) * 0.1;
+        }
+    }
+    
+    animateScared(character, bodyParts, time) {
+        // Quick trembling motion
+        const tremble = Math.sin(time * 25) * 0.02;
+        character.position.x += tremble;
+        character.position.z += tremble * 0.5;
+        
+        // Head looking around frantically
+        if (bodyParts.head) {
+            bodyParts.head.rotation.y = Math.sin(time * 12) * 0.3;
+            bodyParts.head.position.y = 0.73; // Slightly ducked
+        }
+        
+        // Arms close to body, defensive
+        if (bodyParts.leftUpperArm) {
+            bodyParts.leftUpperArm.rotation.z = 0.8 + Math.sin(time * 15) * 0.1;
+        }
+        if (bodyParts.rightUpperArm) {
+            bodyParts.rightUpperArm.rotation.z = -0.8 - Math.sin(time * 15) * 0.1;
+        }
+        
+        // Body hunched forward
+        if (bodyParts.body) {
+            bodyParts.body.rotation.x = 0.2 + Math.sin(time * 10) * 0.05;
+        }
+    }
+    
+    animateWalking(character, bodyParts, time) {
+        // Walking arm swing
+        if (bodyParts.leftUpperArm) {
+            bodyParts.leftUpperArm.rotation.x = Math.sin(time * 6) * 0.5;
+        }
+        if (bodyParts.rightUpperArm) {
+            bodyParts.rightUpperArm.rotation.x = Math.sin(time * 6 + Math.PI) * 0.5;
+        }
+        
+        // Walking head bob
+        if (bodyParts.head) {
+            bodyParts.head.position.y = 0.75 + Math.sin(time * 12) * 0.02;
+        }
+    }
+    
+    animateIdle(character, bodyParts, time) {
+        // Gentle breathing motion
+        if (bodyParts.body) {
+            bodyParts.body.scale.y = 1 + Math.sin(time * 2) * 0.02;
+        }
+        
+        // Slight head movement
+        if (bodyParts.head) {
+            bodyParts.head.rotation.y = Math.sin(time * 0.5) * 0.05;
+            bodyParts.head.position.y = 0.75 + Math.sin(time * 1.5) * 0.01;
+        }
+    }
+    
+    checkMonsterReactions() {
+        if (!this.mina) return;
+        
+        this.monsters.forEach(monster => {
+            const distanceToMina = monster.position.distanceTo(this.mina.position);
+            
+            // If monster is close, trigger scared animation
+            if (distanceToMina < 15 && Math.random() < 0.02) { // 2% chance per frame when close
+                this.playCharacterAnimation(this.mina, 'scared', 1500);
+                this.playCharacterAnimation(this.sacha, 'scared', 1500);
+                
+                // Add some random reactions
+                if (Math.random() < 0.3) {
+                    setTimeout(() => {
+                        this.playCharacterAnimation(this.mina, 'jumping', 1000);
+                    }, 800);
+                }
+            }
+        });
+        
+        // Random laughing when no monsters nearby
+        if (this.gameState.monstersNearby === 0 && Math.random() < 0.001) { // 0.1% chance per frame
+            if (Math.random() > 0.5) {
+                this.playCharacterAnimation(this.mina, 'laughing', 2000);
+            } else {
+                this.playCharacterAnimation(this.sacha, 'laughing', 2000);
+            }
+        }
+        
+        // Jumping when collecting treasures (triggered elsewhere)
+        // This function is called from treasure collection
+    }
+    
     createSpeechBubble(speaker, text) {
         // Remove existing bubble
         if (this.speechSystem.currentBubble) {
@@ -1981,8 +2168,18 @@ class MinaAdventureGame {
             const time = this.clock.getElapsedTime();
             this.mina.position.y = 1.35 + Math.sin(time * 10) * 0.03;
             
+            // Set walking animation state
+            if (this.mina.userData && this.mina.userData.animations) {
+                this.mina.userData.animations.currentState = 'walking';
+            }
+            
             // Animate Mina's limbs while walking
             this.animateMinaWalking(time);
+        } else {
+            // Set idle animation state when not moving
+            if (this.mina.userData && this.mina.userData.animations) {
+                this.mina.userData.animations.currentState = 'idle';
+            }
         }
     }
     
@@ -1998,20 +2195,77 @@ class MinaAdventureGame {
             this.cameraRotation = { horizontal: 0, vertical: 0 };
         }
         
-        const cameraDistance = 8; // Closer to see smaller character
-        const cameraHeight = 4;   // Lower for better view
+        // Dynamic camera system for cinematic feel
+        const time = this.clock.getElapsedTime();
+        const isMoving = this.controls.forward || this.controls.backward || this.controls.left || this.controls.right;
         
-        // Calculate camera position based on rotation
-        const x = this.mina.position.x + cameraDistance * Math.sin(this.cameraRotation.horizontal);
-        const z = this.mina.position.z + cameraDistance * Math.cos(this.cameraRotation.horizontal);
-        const y = this.mina.position.y + cameraHeight + Math.sin(this.cameraRotation.vertical) * 4;
+        // Dynamic distance and height based on movement and monsters
+        let baseCameraDistance = 12; // Further back for cinematic view
+        let baseCameraHeight = 6;    // Higher for dramatic angle
         
-        // Smoothly move camera to target position
+        // Camera gets closer when monsters are nearby for tension
+        if (this.gameState.monstersNearby > 0) {
+            baseCameraDistance = Math.max(8, baseCameraDistance - this.gameState.monstersNearby * 2);
+            baseCameraHeight = Math.max(4, baseCameraHeight - this.gameState.monstersNearby * 0.5);
+        }
+        
+        // Slight camera shake when scared
+        let shakeX = 0, shakeZ = 0;
+        if (this.mina.userData?.animations?.currentState === 'scared') {
+            shakeX = Math.sin(time * 30) * 0.5;
+            shakeZ = Math.cos(time * 25) * 0.3;
+        }
+        
+        // Smooth camera sway when moving for cinematic feel
+        let cinematicSway = 0;
+        if (isMoving) {
+            cinematicSway = Math.sin(time * 2) * 0.1; // Gentle sway
+        }
+        
+        // Dynamic camera offset for more interesting angles
+        const cameraDistance = baseCameraDistance + Math.sin(time * 0.5) * 1; // Breathing distance
+        const cameraHeight = baseCameraHeight + Math.sin(time * 0.3) * 0.5;   // Subtle height variation
+        
+        // Calculate camera position with cinematic enhancements
+        const x = this.mina.position.x + 
+                  cameraDistance * Math.sin(this.cameraRotation.horizontal + cinematicSway) + 
+                  shakeX;
+        const z = this.mina.position.z + 
+                  cameraDistance * Math.cos(this.cameraRotation.horizontal + cinematicSway) + 
+                  shakeZ;
+        const y = this.mina.position.y + 
+                  cameraHeight + 
+                  Math.sin(this.cameraRotation.vertical) * 4;
+        
+        // Smoothly move camera to target position with different speeds for drama
         const targetPosition = new THREE.Vector3(x, y, z);
-        this.camera.position.lerp(targetPosition, 0.1);
+        const lerpSpeed = this.gameState.monstersNearby > 0 ? 0.15 : 0.08; // Faster when in danger
+        this.camera.position.lerp(targetPosition, lerpSpeed);
         
-        // Always look at Mina
-        this.camera.lookAt(this.mina.position);
+        // Enhanced look-at with slight offset for more dynamic framing
+        const lookAtTarget = this.mina.position.clone();
+        
+        // Add slight vertical offset when jumping
+        if (this.mina.userData?.animations?.currentState === 'jumping') {
+            lookAtTarget.y += 1;
+        }
+        
+        // Add forward prediction when moving fast
+        if (isMoving && this.controls.run) {
+            const moveDirection = new THREE.Vector3();
+            if (this.controls.forward) moveDirection.z -= 2;
+            if (this.controls.backward) moveDirection.z += 2;
+            if (this.controls.left) moveDirection.x -= 2;
+            if (this.controls.right) moveDirection.x += 2;
+            lookAtTarget.add(moveDirection);
+        }
+        
+        this.camera.lookAt(lookAtTarget);
+        
+        // Adjust field of view dynamically for cinematic effect
+        const targetFOV = this.gameState.monstersNearby > 0 ? 85 : 75; // Wider when in danger
+        this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFOV, 0.02);
+        this.camera.updateProjectionMatrix();
     }
     
     updateDynamicLighting() {
@@ -2341,9 +2595,16 @@ class MinaAdventureGame {
                     treasure.visible = false;
                     this.gameState.treasuresFound++;
                     
+                    // Celebration animations!
+                    this.playCharacterAnimation(this.mina, 'jumping', 2000);
+                    this.playCharacterAnimation(this.sacha, 'laughing', 1500);
+                    
                     console.log(`Treasure collected! ${this.gameState.treasuresFound}/${this.gameState.totalTreasures}`);
                     
                     if (this.gameState.treasuresFound >= this.gameState.totalTreasures) {
+                        // Final celebration
+                        this.playCharacterAnimation(this.mina, 'laughing', 3000);
+                        this.playCharacterAnimation(this.sacha, 'jumping', 3000);
                         this.gameWon();
                     }
                 }
@@ -2410,6 +2671,13 @@ class MinaAdventureGame {
             this.updateSachaMovement(deltaTime);
             this.updateMonsters(deltaTime);
             this.checkTreasureCollection();
+            
+            // Update character animations
+            this.updateCharacterAnimations(this.mina, deltaTime);
+            this.updateCharacterAnimations(this.sacha, deltaTime);
+            
+            // Check for monster reactions
+            this.checkMonsterReactions();
         } else {
             console.log('Movement blocked - mouseLocked:', this.mouseLocked, 'gameOver:', this.gameState.gameOver, 'gameWon:', this.gameState.gameWon);
         }
